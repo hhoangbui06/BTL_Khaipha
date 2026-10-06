@@ -39,6 +39,20 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
+// Ensure database is connected before handling requests
+app.use(async (req, res, next) => {
+  try {
+    await database.connect();
+    next();
+  } catch (err) {
+    console.error('Database connection middleware error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Không thể kết nối cơ sở dữ liệu MongoDB Atlas'
+    });
+  }
+});
+
 // Routes
 app.use('/api/auth', authRoute);
 app.use('/api/posts', postRoute);

@@ -1786,3 +1786,37 @@ a:hover {
   transform: none;
 }
 
+/* Custom Click-to-Dismiss Toast Animations */
+@keyframes toastSlideInRight {
+  0% {
+    transform: translate3d(120%, 0, 0) scale(0.92);
+    opacity: 0;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes toastSlideOutRight {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(140%, 0, 0) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.custom-toast-container {
+  cursor: pointer !important;
+  user-select: none;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-toast-container:hover {
+  transform: translateX(-4px);
+}
+
+

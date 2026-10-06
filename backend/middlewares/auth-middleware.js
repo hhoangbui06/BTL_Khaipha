@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/user-model');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'btl_khaipha_jwt_secret_key_2024_secure';
+
 // Verify JWT token - required authentication
 module.exports.requireAuth = async (req, res, next) => {
   try {
@@ -22,7 +24,7 @@ module.exports.requireAuth = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     const user = await User.findById(decoded.id).select('-password -refreshToken');
 
     if (!user || user.deleted || user.status !== 'active') {
@@ -61,7 +63,7 @@ module.exports.optionalAuth = async (req, res, next) => {
     }
 
     if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET);
       const user = await User.findById(decoded.id).select('-password -refreshToken');
       if (user && !user.deleted && user.status === 'active') {
         req.user = user;

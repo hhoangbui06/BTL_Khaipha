@@ -3,12 +3,15 @@ const crypto = require('crypto');
 const User = require('../models/user-model');
 const { sendVerificationEmail, sendResetPasswordEmail } = require('../helpers/send-mail-helper');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'btl_khaipha_jwt_secret_key_2024_secure';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'btl_khaipha_jwt_refresh_secret_key_2024';
+
 // Generate tokens
 const generateTokens = (userId) => {
-  const accessToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+  const accessToken = jwt.sign({ id: userId }, JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   });
-  const refreshToken = jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET, {
+  const refreshToken = jwt.sign({ id: userId }, JWT_REFRESH_SECRET, {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d'
   });
   return { accessToken, refreshToken };
@@ -53,8 +56,12 @@ module.exports.register = async (req, res) => {
       emailVerified: false
     });
 
-    // Send verification email
-    await sendVerificationEmail(email, verifyToken);
+    // Send verification email safely without blocking registration if mail server fails
+    try {
+      await sendVerificationEmail(email, verifyToken);
+    } catch (mailError) {
+      console.warn('Gửi email xác thực thất bại:', mailError.message);
+    }
 
     const { accessToken, refreshToken } = generateTokens(user._id);
     user.refreshToken = refreshToken;
@@ -73,7 +80,7 @@ module.exports.register = async (req, res) => {
     console.error('Register error:', error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi server'
+      message: error.message || 'Lỗi server'
     });
   }
 };
@@ -130,7 +137,7 @@ module.exports.login = async (req, res) => {
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi server'
+      message: error.message || 'Lỗi server'
     });
   }
 };
@@ -318,7 +325,7 @@ module.exports.refreshToken = async (req, res) => {
       });
     }
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
     const user = await User.findById(decoded.id);
 
     if (!user || user.refreshToken !== refreshToken) {
