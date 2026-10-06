@@ -19,7 +19,9 @@ const nextConfig = {
     return config;
   },
   async rewrites() {
-    const backendHost = process.env.BACKEND_URL || 'http://localhost:5000';
+    const backendHost = process.env.BACKEND_URL || 
+                        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 
+                        'https://btl-khaipha-sced.vercel.app';
     return [
       {
         source: '/api/:path*',

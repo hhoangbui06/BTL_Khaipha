@@ -2,7 +2,9 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 
-  (typeof window !== 'undefined' && !window.location.hostname.includes('localhost') ? '/api' : 'http://localhost:5000/api');
+  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:5000/api' 
+    : 'https://btl-khaipha-sced.vercel.app/api');
 
 const api = axios.create({
   baseURL: API_URL,
