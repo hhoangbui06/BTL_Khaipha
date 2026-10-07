@@ -11,6 +11,7 @@ import os
 import sys
 import traceback
 from datetime import datetime
+from urllib.parse import parse_qs, urlencode
 
 from flask import Flask, jsonify, request
 from flask.json.provider import DefaultJSONProvider
@@ -28,8 +29,24 @@ class JSONProvider(DefaultJSONProvider):
         return DefaultJSONProvider.default(o)
 
 
+class RestoreVercelPath:
+    """Vercel rewrite mọi request về /api/index nên Flask không thấy đường dẫn gốc.
+    vercel.json truyền đường dẫn gốc qua query ?__path=..., khôi phục lại tại đây."""
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        query = parse_qs(environ.get("QUERY_STRING", ""), keep_blank_values=True)
+        if "__path" in query:
+            environ["PATH_INFO"] = "/" + query.pop("__path")[0].lstrip("/")
+            environ["QUERY_STRING"] = urlencode(query, doseq=True)
+        return self.wsgi_app(environ, start_response)
+
+
 app = Flask(__name__)
 app.json = JSONProvider(app)
+app.wsgi_app = RestoreVercelPath(app.wsgi_app)
 
 
 def _authorized():

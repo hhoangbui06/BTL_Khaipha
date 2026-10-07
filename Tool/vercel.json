@@ -5,7 +5,7 @@
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index" }
+    { "source": "/:path*", "destination": "/api/index?__path=/:path*" }
   ],
   "crons": [
     { "path": "/api/sync", "schedule": "0 0 * * *" }
