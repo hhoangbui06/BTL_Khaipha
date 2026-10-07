@@ -14,7 +14,8 @@ import {
   FiExternalLink,
   FiBookOpen,
   FiShield,
-  FiKey
+  FiKey,
+  FiCpu
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
@@ -131,6 +132,15 @@ export default function AdminLayout({ children }) {
               className={`admin-nav-link ${pathname.startsWith('/admin/labels') ? 'active' : ''}`}
             >
               <FiTag /> Nhãn & Chủ đề
+            </Link>
+          )}
+
+          {['admin', 'admin_posts'].includes(role) && (
+            <Link
+              href="/admin/lda"
+              className={`admin-nav-link ${pathname.startsWith('/admin/lda') ? 'active' : ''}`}
+            >
+              <FiCpu /> Tự động gán nhãn (LDA)
             </Link>
           )}
         </div>

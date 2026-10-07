@@ -19,6 +19,12 @@ router.delete('/users/:id', requireRole('admin'), adminController.deleteUser);
 router.get('/posts', requireRole('admin', 'admin_posts'), adminController.getAllPosts);
 router.put('/posts/:id', requireRole('admin', 'admin_posts'), adminController.updatePostStatus);
 router.delete('/posts/:id', requireRole('admin', 'admin_posts'), adminController.deletePost);
+router.put('/posts/:id/labels', requireRole('admin', 'admin_posts'), adminController.setPostLabels);
+
+// LDA auto-label tool
+router.get('/lda/status', requireRole('admin', 'admin_posts'), adminController.getLdaStatus);
+router.post('/lda/sync', requireRole('admin', 'admin_posts'), adminController.syncLda);
+router.post('/lda/predict', requireRole('admin', 'admin_posts'), adminController.predictLda);
 
 // Comment management
 router.get('/comments', requireRole('admin', 'admin_posts', 'admin_support'), adminController.getAllComments);

@@ -1,0 +1,7 @@
+flask>=3.0
+pymongo>=4.6
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.4
+pyvi==0.1.1
+python-dotenv>=1.0

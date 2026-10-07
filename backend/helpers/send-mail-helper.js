@@ -1,6 +1,8 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
+const CLIENT_URL = process.env.CLIENT_URL || 'https://btl-khaipha.vercel.app';
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -28,7 +30,7 @@ module.exports.sendEmail = async (receiveEmail, subject, html) => {
 };
 
 module.exports.sendVerificationEmail = async (email, token) => {
-  const verifyUrl = `${process.env.CLIENT_URL}/verify-email?token=${token}`;
+  const verifyUrl = `${CLIENT_URL}/verify-email?token=${token}`;
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f0f23; border-radius: 16px; overflow: hidden;">
       <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 40px 30px; text-align: center;">
@@ -50,7 +52,7 @@ module.exports.sendVerificationEmail = async (email, token) => {
 };
 
 module.exports.sendResetPasswordEmail = async (email, token) => {
-  const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${token}`;
+  const resetUrl = `${CLIENT_URL}/reset-password?token=${token}`;
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f0f23; border-radius: 16px; overflow: hidden;">
       <div style="background: linear-gradient(135deg, #ef4444, #f97316); padding: 40px 30px; text-align: center;">

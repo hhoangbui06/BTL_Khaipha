@@ -1,0 +1,341 @@
+"""Nghiệp vụ của Tool: đọc dữ liệu từ MongoDB, huấn luyện, gán nhãn tự động.
+
+- Dữ liệu huấn luyện: các bài viết chưa xóa, có ít nhất 1 nhãn còn tồn tại,
+  nhãn do con người gán (autoLabeled != true) và KHÔNG chứa ảnh trong nội dung.
+- Nhãn chưa có bài viết hợp lệ nào sẽ bị bỏ qua.
+- Mỗi lần được gọi, Tool tính "dấu vân tay" (fingerprint) của dữ liệu huấn luyện.
+  Nếu bài viết / nhãn thay đổi thì fingerprint đổi -> tự động huấn luyện lại.
+- Bài viết chưa có nhãn (hoặc chỉ còn nhãn đã bị xóa) được gán 1 nhãn và đánh
+  dấu autoLabeled = true. Khi mô hình đổi, các bài tự gán sẽ được gán lại.
+  Nhãn do con người gán không bao giờ bị ghi đè.
+"""
+import hashlib
+import random
+from datetime import datetime, timezone
+
+from bson import ObjectId
+
+from . import config
+from .db import get_db
+from .lda_model import LdaLabeler
+from .preprocess import has_image, post_tokens, tokenize
+
+MODEL_ID = "current"
+_cache = {"fingerprint": None, "model": None}
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def _object_ids(values):
+    result = []
+    for value in values or []:
+        try:
+            result.append(value if isinstance(value, ObjectId) else ObjectId(str(value)))
+        except Exception:
+            continue
+    return result
+
+
+# --------------------------------------------------------------------- data
+def load_active_labels(db):
+    labels = db.labels.find({"deleted": {"$ne": True}}, {"name": 1, "description": 1, "color": 1})
+    return {str(label["_id"]): label for label in labels}
+
+
+def collect_training_data(db):
+    labels = load_active_labels(db)
+    cursor = db.posts.find(
+        {"deleted": {"$ne": True}, "autoLabeled": {"$ne": True}, "labels.0": {"$exists": True}},
+        {"title": 1, "content": 1, "labels": 1},
+    )
+
+    posts, excluded_image = [], 0
+    for post in cursor:
+        if has_image(post.get("content", "")):
+            excluded_image += 1
+            continue
+        post_labels = sorted({str(l) for l in post.get("labels", []) if str(l) in labels})
+        if post_labels:
+            posts.append(
+                {
+                    "id": str(post["_id"]),
+                    "title": post.get("title", ""),
+                    "content": post.get("content", ""),
+                    "labels": post_labels,
+                }
+            )
+
+    label_counts = {}
+    for post in posts:
+        for label_id in post["labels"]:
+            label_counts[label_id] = label_counts.get(label_id, 0) + 1
+    trainable = sorted(l for l, c in label_counts.items() if c >= config.MIN_DOCS_PER_LABEL)
+
+    for post in posts:
+        post["labels"] = [l for l in post["labels"] if l in trainable]
+    posts = [p for p in posts if p["labels"]]
+    posts.sort(key=lambda p: p["id"])
+
+    return {
+        "labels": labels,
+        "trainable_labels": trainable,
+        "label_counts": {l: label_counts[l] for l in trainable},
+        "posts": posts,
+        "excluded_image_posts": excluded_image,
+        "skipped_labels": sorted(set(labels) - set(trainable)),
+    }
+
+
+def fingerprint(data):
+    h = hashlib.sha1()
+    h.update(
+        f"{config.ALGORITHM_VERSION}|{config.NUM_TOPICS}|{config.MAX_ITER}|{config.DOC_TOPIC_PRIOR}|"
+        f"{config.TOPIC_WORD_PRIOR}|{config.TITLE_WEIGHT}|{config.USE_LABEL_TEXT}".encode()
+    )
+    for label_id in data["trainable_labels"]:
+        label = data["labels"][label_id]
+        h.update(f"L|{label_id}|{label.get('name', '')}|{label.get('description', '')}".encode())
+    for post in data["posts"]:
+        body = hashlib.sha1((post["title"] + "\x00" + post["content"]).encode()).hexdigest()
+        h.update(f"P|{post['id']}|{body}|{','.join(post['labels'])}".encode())
+    return h.hexdigest()
+
+
+def _build_corpus(data, posts=None):
+    documents, document_labels = [], []
+    for post in data["posts"] if posts is None else posts:
+        tokens = post_tokens(post["title"], post["content"])
+        if tokens:
+            documents.append(tokens)
+            document_labels.append(post["labels"])
+    if config.USE_LABEL_TEXT:
+        for label_id in data["trainable_labels"]:
+            label = data["labels"][label_id]
+            tokens = tokenize(f"{label.get('name', '')} {label.get('description', '')}")
+            if tokens:
+                documents.append(tokens)
+                document_labels.append([label_id])
+    return documents, document_labels
+
+
+# -------------------------------------------------------------------- model
+def _train(db, data, fp):
+    meta = {
+        "_id": MODEL_ID,
+        "fingerprint": fp,
+        "algorithm": config.ALGORITHM_VERSION,
+        "trainedAt": _now(),
+        "ready": False,
+        "reason": None,
+        "stats": {
+            "trainingPosts": len(data["posts"]),
+            "excludedImagePosts": data["excluded_image_posts"],
+            "labelDocCounts": data["label_counts"],
+            "skippedLabels": data["skipped_labels"],
+        },
+    }
+
+    model = None
+    if len(data["trainable_labels"]) < config.MIN_LABELS:
+        meta["reason"] = (
+            f"Cần ít nhất {config.MIN_LABELS} nhãn có bài viết (không chứa ảnh) để huấn luyện, "
+            f"hiện có {len(data['trainable_labels'])}"
+        )
+    else:
+        documents, document_labels = _build_corpus(data)
+        if len(documents) < 2:
+            meta["reason"] = "Không đủ văn bản sau tiền xử lý để huấn luyện"
+        else:
+            model = LdaLabeler.train(documents, document_labels, data["trainable_labels"])
+            meta.update(model.to_document())
+            meta["ready"] = True
+            meta["stats"]["documents"] = len(documents)
+            meta["stats"]["vocabularySize"] = len(model.vocabulary)
+            meta["stats"]["perplexity"] = round(model.perplexity, 2)
+            meta["topics"] = model.top_words(10)
+
+    db.lda_models.replace_one({"_id": MODEL_ID}, meta, upsert=True)
+    _cache.update(fingerprint=fp, model=model)
+    return model, meta
+
+
+def ensure_model(force=False):
+    """Trả về (model, meta). Tự huấn luyện lại nếu dữ liệu đã thay đổi."""
+    db = get_db()
+    data = collect_training_data(db)
+    fp = fingerprint(data)
+
+    if not force:
+        if _cache["fingerprint"] == fp and _cache["model"] is not None:
+            meta = db.lda_models.find_one({"_id": MODEL_ID}, {"topicWord": 0, "centroids": 0, "vocabulary": 0})
+            if meta and meta.get("fingerprint") == fp:
+                return _cache["model"], meta
+        stored = db.lda_models.find_one({"_id": MODEL_ID})
+        if stored and stored.get("fingerprint") == fp:
+            model = LdaLabeler.from_document(stored) if stored.get("ready") else None
+            _cache.update(fingerprint=fp, model=model)
+            return model, stored
+
+    return _train(db, data, fp)
+
+
+# ----------------------------------------------------------------- labeling
+def label_posts(post_ids=None, force_relabel=False):
+    """Gán nhãn cho bài chưa có nhãn (hoặc bài do Tool tự gán khi mô hình đổi).
+
+    post_ids: chỉ xử lý các bài này (dùng khi backend vừa tạo/sửa bài);
+    None: quét toàn bộ cơ sở dữ liệu.
+    """
+    db = get_db()
+    model, meta = ensure_model()
+    if model is None:
+        return {"ready": False, "reason": meta.get("reason"), "labeled": []}
+
+    model_fp = meta["fingerprint"]
+    active_ids = _object_ids(load_active_labels(db).keys())
+    query = {"deleted": {"$ne": True}}
+    if post_ids:
+        query["_id"] = {"$in": _object_ids(post_ids)}
+    elif force_relabel:
+        query["$or"] = [{"labels": {"$nin": active_ids}}, {"autoLabeled": True}]
+    else:
+        query["$or"] = [
+            {"labels": {"$nin": active_ids}},
+            {"autoLabeled": True, "autoLabelModel": {"$ne": model_fp}},
+        ]
+
+    active = set(map(str, active_ids))
+    labels = load_active_labels(db)
+    results = []
+    for post in db.posts.find(query, {"title": 1, "content": 1, "labels": 1, "autoLabeled": 1}):
+        has_human_label = not post.get("autoLabeled") and any(str(l) in active for l in post.get("labels", []))
+        if has_human_label:
+            continue  # không ghi đè nhãn do con người gán
+
+        prediction = model.predict(post_tokens(post.get("title"), post.get("content")))
+        if prediction is None:
+            results.append({"postId": str(post["_id"]), "skipped": "Không có từ nào thuộc bộ từ vựng"})
+            continue
+
+        label_id, score, _ = prediction
+        db.posts.update_one(
+            {"_id": post["_id"]},
+            {
+                "$set": {
+                    "labels": [ObjectId(label_id)],
+                    "autoLabeled": True,
+                    "autoLabelScore": score,
+                    "autoLabelModel": model_fp,
+                    "autoLabeledAt": _now(),
+                }
+            },
+        )
+        results.append(
+            {
+                "postId": str(post["_id"]),
+                "title": post.get("title"),
+                "labelId": label_id,
+                "labelName": labels.get(label_id, {}).get("name"),
+                "score": score,
+            }
+        )
+    return {"ready": True, "model": model_fp, "labeled": results}
+
+
+def sync(force_train=False):
+    """Đồng bộ toàn bộ: huấn luyện lại nếu cần rồi gán nhãn cho các bài còn thiếu."""
+    model, meta = ensure_model(force=force_train)
+    result = label_posts(force_relabel=force_train) if model is not None else {
+        "ready": False,
+        "reason": meta.get("reason"),
+        "labeled": [],
+    }
+    result["trainedAt"] = meta.get("trainedAt")
+    return result
+
+
+def predict_text(title="", content=""):
+    """Dự đoán nhãn cho một đoạn văn bản bất kỳ (không ghi vào CSDL)."""
+    model, meta = ensure_model()
+    if model is None:
+        return {"ready": False, "reason": meta.get("reason")}
+    prediction = model.predict(post_tokens(title, content))
+    if prediction is None:
+        return {"ready": True, "label": None, "reason": "Không có từ nào thuộc bộ từ vựng"}
+    labels = load_active_labels(get_db())
+    label_id, score, scores = prediction
+    return {
+        "ready": True,
+        "label": {"id": label_id, "name": labels.get(label_id, {}).get("name"), "score": score},
+        "scores": sorted(
+            ({"id": l, "name": labels.get(l, {}).get("name"), "score": s} for l, s in scores.items()),
+            key=lambda x: -x["score"],
+        ),
+    }
+
+
+def status():
+    db = get_db()
+    data = collect_training_data(db)
+    current_fp = fingerprint(data)
+    meta = db.lda_models.find_one({"_id": MODEL_ID}, {"topicWord": 0, "centroids": 0, "vocabulary": 0}) or {}
+    labels = data["labels"]
+    meta.pop("_id", None)
+
+    def named(label_id):
+        return {"id": label_id, "name": labels.get(label_id, {}).get("name", "(đã xóa)")}
+
+    active_ids = _object_ids(labels.keys())
+    return {
+        "model": {
+            **meta,
+            "labelIds": [named(l) for l in meta.get("labelIds", [])],
+            "stale": meta.get("fingerprint") != current_fp,
+        },
+        "data": {
+            "trainingPosts": len(data["posts"]),
+            "excludedImagePosts": data["excluded_image_posts"],
+            "trainableLabels": [{**named(l), "posts": data["label_counts"][l]} for l in data["trainable_labels"]],
+            "skippedLabels": [named(l) for l in data["skipped_labels"]],
+            "unlabeledPosts": db.posts.count_documents({"deleted": {"$ne": True}, "labels": {"$nin": active_ids}}),
+            "autoLabeledPosts": db.posts.count_documents({"deleted": {"$ne": True}, "autoLabeled": True}),
+        },
+    }
+
+
+def evaluate(test_ratio=0.3, seed=42):
+    """Đánh giá offline: chia train/test trên các bài đã gán nhãn (không ghi CSDL)."""
+    data = collect_training_data(get_db())
+    posts = list(data["posts"])
+    random.Random(seed).shuffle(posts)
+    n_test = max(1, int(len(posts) * test_ratio))
+    test, train = posts[:n_test], posts[n_test:]
+    train_labels = sorted({l for p in train for l in p["labels"]})
+    if len(train_labels) < 2 or not test:
+        return {"error": "Không đủ dữ liệu để đánh giá (cần nhiều bài có nhãn hơn)"}
+
+    documents, document_labels = _build_corpus({**data, "trainable_labels": train_labels}, train)
+    model = LdaLabeler.train(documents, document_labels, train_labels)
+    correct, details = 0, []
+    for post in test:
+        prediction = model.predict(post_tokens(post["title"], post["content"]))
+        predicted = prediction[0] if prediction else None
+        ok = predicted in post["labels"]
+        correct += ok
+        details.append(
+            {
+                "title": post["title"],
+                "true": [data["labels"][l]["name"] for l in post["labels"]],
+                "predicted": data["labels"].get(predicted, {}).get("name") if predicted else None,
+                "correct": ok,
+            }
+        )
+    return {
+        "train": len(train),
+        "test": len(test),
+        "accuracy": round(correct / len(test), 4),
+        "perplexity": round(model.perplexity, 2),
+        "details": details,
+    }

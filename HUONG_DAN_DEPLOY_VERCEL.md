@@ -1,5 +1,8 @@
 # HƯỚNG DẪN CHI TIẾT DEPLOY DỰ ÁN LÊN VERCEL
 
+- **Frontend**: https://btl-khaipha.vercel.app
+- **Backend**: https://btl-khaipha-sced.vercel.app
+
 Dự án gồm 2 phần:
 * **Frontend**: Next.js (App Router)
 * **Backend**: Node.js / ExpressJS + MongoDB Atlas + Cloudinary + Nodemailer
@@ -54,12 +57,12 @@ Nếu bạn chưa đưa code lên GitHub:
 | `API_SECRET` | `AU5GQzhPWQhNfkfPmTIcJAW_9QU` |
 | `EMAIL` | `huyhoangbui612@gmail.com` |
 | `PASS` | `uhbw bgfn hszu oxyy` |
-| `CLIENT_URL` | Tạm thời để `https://*.vercel.app` (sẽ cập nhật sau ở Bước 4) |
+| `CLIENT_URL` | `https://btl-khaipha.vercel.app` |
 
 6. Bấm nút **Deploy**.
 7. Chờ khoảng 30 giây đến 1 phút. Sau khi hoàn tất, Vercel sẽ cấp cho bạn một đường link backend, ví dụ:
-   `https://vanban-blog-backend.vercel.app`
-8. **Kiểm tra**: Truy cập `https://vanban-blog-backend.vercel.app/api/health` trên trình duyệt. Nếu hiển thị `{"status":"ok","message":"Blog API is running"}` là Backend đã hoạt động hoàn hảo!
+   `https://btl-khaipha-sced.vercel.app`
+8. **Kiểm tra**: Truy cập `https://btl-khaipha-sced.vercel.app/api/health` trên trình duyệt. Nếu hiển thị `{"status":"ok","message":"Blog API is running"}` là Backend đã hoạt động hoàn hảo!
 
 ---
 
@@ -76,11 +79,11 @@ Nếu bạn chưa đưa code lên GitHub:
 
 | Tên biến (Key) | Giá trị (Value) |
 | :--- | :--- |
-| `NEXT_PUBLIC_API_URL` | `<Link Backend ở Bước 2>/api`<br>*(Ví dụ: `https://vanban-blog-backend.vercel.app/api`)* |
+| `NEXT_PUBLIC_API_URL` | `https://btl-khaipha-sced.vercel.app/api` |
 
 6. Bấm nút **Deploy**.
 7. Chờ khoảng 1-2 phút để Vercel build Next.js. Sau khi xong, bạn sẽ nhận được đường link chính thức của trang web blog:
-   *(Ví dụ: `https://vanban-blog-web.vercel.app`)*
+   `https://btl-khaipha.vercel.app`
 
 ---
 
@@ -89,8 +92,36 @@ Nếu bạn chưa đưa code lên GitHub:
 1. Vào lại Project **Backend** trên Vercel.
 2. Vào tab **Settings** $\rightarrow$ mục **Environment Variables**.
 3. Tìm biến `CLIENT_URL`, sửa giá trị thành đường link Frontend vừa tạo ở Bước 3:
-   *(Ví dụ: `https://vanban-blog-web.vercel.app`)*
+   `https://btl-khaipha.vercel.app`
 4. Vào tab **Deployments** $\rightarrow$ bấm vào dấu 3 chấm cạnh lần deploy mới nhất $\rightarrow$ chọn **Redeploy**.
+
+---
+
+## BƯỚC 5: DEPLOY LDA TOOL (TỰ ĐỘNG GÁN NHÃN) LÊN VERCEL
+
+1. Vercel → **Add New...** → **Project** → chọn lại cùng Repository → **Import**.
+2. **Root Directory**: chọn thư mục **`Tool`**; **Framework Preset**: **Other**.
+3. Thêm Environment Variables:
+
+| Tên biến (Key) | Giá trị (Value) |
+| :--- | :--- |
+| `MONGODB` | Giống `MONGODB` của Backend |
+| `TOOL_SECRET` | Một chuỗi bí mật ngẫu nhiên (vd: tạo bằng `openssl rand -hex 32`) |
+| `CRON_SECRET` | Một chuỗi bí mật ngẫu nhiên khác |
+
+4. Bấm **Deploy**, kiểm tra `https://<link-tool>.vercel.app/api/health`.
+5. Vào Project **Backend** → **Settings** → **Environment Variables**, thêm:
+
+| Tên biến (Key) | Giá trị (Value) |
+| :--- | :--- |
+| `LDA_TOOL_URL` | `https://<link-tool>.vercel.app` |
+| `LDA_TOOL_SECRET` | Giống `TOOL_SECRET` ở trên |
+
+6. **Redeploy** Backend (và Frontend để có trang admin mới).
+7. Đăng nhập admin → **Tự động gán nhãn (LDA)** → bấm **Đồng bộ ngay** để huấn luyện lần đầu.
+   Sau đó Tool tự chạy: khi đăng bài mới chưa có nhãn, khi admin gán/sửa nhãn, và Cron hằng ngày.
+
+Chi tiết thuật toán và API: xem [Tool/README.md](Tool/README.md).
 
 ---
 

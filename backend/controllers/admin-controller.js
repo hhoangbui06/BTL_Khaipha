@@ -3,6 +3,7 @@ const Post = require('../models/post-model');
 const Comment = require('../models/comment-model');
 const Label = require('../models/label-model');
 const { uploadToCloudinary } = require('../middlewares/upload-middleware');
+const { callTool, notifyDataChanged } = require('../helpers/lda-tool-helper');
 
 // Dashboard stats
 module.exports.getDashboard = async (req, res) => {
@@ -244,6 +245,7 @@ module.exports.deletePost = async (req, res) => {
         message: 'Bài viết không tồn tại'
       });
     }
+    notifyDataChanged();
 
     res.json({
       success: true,
@@ -252,6 +254,85 @@ module.exports.deletePost = async (req, res) => {
   } catch (error) {
     console.error('Delete post error:', error);
     res.status(500).json({ success: false, message: 'Lỗi server' });
+  }
+};
+
+// Assign labels to a post (admin) - có thể tạo nhãn mới ngay khi gán
+module.exports.setPostLabels = async (req, res) => {
+  try {
+    const { labelIds = [], newLabels = [] } = req.body;
+
+    const post = await Post.findById(req.params.id);
+    if (!post || post.deleted) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bài viết không tồn tại'
+      });
+    }
+
+    const ids = (await Label.find({ _id: { $in: labelIds }, deleted: false }).select('_id'))
+      .map(l => l._id.toString());
+
+    for (const item of newLabels) {
+      const name = (item.name || '').trim();
+      if (!name) continue;
+      let label = await Label.findOne({ name, deleted: false });
+      if (!label) {
+        label = await Label.create({ name, color: item.color || '#6366f1', description: item.description || '' });
+      }
+      ids.push(label._id.toString());
+    }
+
+    post.labels = [...new Set(ids)];
+    post.autoLabeled = false; // admin đã xác nhận nhãn
+    post.autoLabelScore = undefined;
+    post.autoLabelModel = undefined;
+    await post.save({ validateBeforeSave: false });
+    notifyDataChanged();
+
+    const updatedPost = await Post.findById(post._id)
+      .populate('author', 'fullName avatar email')
+      .populate('labels', 'name slug color');
+
+    res.json({
+      success: true,
+      message: 'Đã gán nhãn cho bài viết',
+      data: updatedPost
+    });
+  } catch (error) {
+    console.error('Set post labels error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server' });
+  }
+};
+
+// LDA Tool: trạng thái mô hình
+module.exports.getLdaStatus = async (req, res) => {
+  try {
+    const { data } = await callTool('GET', '/api/status', null, 30000);
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(502).json({ success: false, message: `Không kết nối được LDA Tool: ${error.message}` });
+  }
+};
+
+// LDA Tool: đồng bộ (huấn luyện lại nếu cần + gán nhãn bài còn thiếu)
+module.exports.syncLda = async (req, res) => {
+  try {
+    const { data } = await callTool('POST', '/api/sync', { force: !!req.body.force });
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(502).json({ success: false, message: `LDA Tool lỗi: ${error.message}` });
+  }
+};
+
+// LDA Tool: dự đoán thử nhãn cho một đoạn văn bản
+module.exports.predictLda = async (req, res) => {
+  try {
+    const { title = '', content = '' } = req.body;
+    const { data } = await callTool('POST', '/api/predict', { title, content });
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(502).json({ success: false, message: `LDA Tool lỗi: ${error.message}` });
   }
 };
 

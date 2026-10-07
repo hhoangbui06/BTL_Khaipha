@@ -1,17 +1,20 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { adminAPI } from '@/lib/api';
+import { adminAPI, labelAPI } from '@/lib/api';
 import Pagination from '@/components/Pagination';
-import { 
-  FiSearch, 
-  FiTrash2, 
-  FiEdit, 
-  FiEye, 
-  FiStar, 
-  FiCheckCircle, 
+import {
+  FiSearch,
+  FiTrash2,
+  FiEdit,
+  FiEye,
+  FiStar,
+  FiCheckCircle,
   FiXCircle,
-  FiExternalLink
+  FiExternalLink,
+  FiTag,
+  FiX,
+  FiPlus
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -48,6 +51,71 @@ export default function AdminPostsPage() {
   useEffect(() => {
     fetchPosts();
   }, [fetchPosts]);
+
+  // Gán nhãn (admin có thể tạo nhãn mới ngay tại đây)
+  const [allLabels, setAllLabels] = useState([]);
+  const [labelPost, setLabelPost] = useState(null);
+  const [selectedLabelIds, setSelectedLabelIds] = useState([]);
+  const [newLabels, setNewLabels] = useState([]);
+  const [newLabelName, setNewLabelName] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState('#6366f1');
+  const [savingLabels, setSavingLabels] = useState(false);
+
+  const fetchLabels = async () => {
+    try {
+      const { data } = await labelAPI.getAll();
+      if (data.success) setAllLabels(data.data);
+    } catch (error) {
+      console.error('Fetch labels error:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchLabels();
+  }, []);
+
+  const openLabelModal = (post) => {
+    setLabelPost(post);
+    setSelectedLabelIds((post.labels || []).map(l => (typeof l === 'object' ? l._id : l)));
+    setNewLabels([]);
+    setNewLabelName('');
+  };
+
+  const toggleLabel = (id) => {
+    setSelectedLabelIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const addNewLabel = () => {
+    const name = newLabelName.trim();
+    if (!name) return;
+    const existing = allLabels.find(l => l.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      if (!selectedLabelIds.includes(existing._id)) toggleLabel(existing._id);
+    } else if (!newLabels.some(l => l.name.toLowerCase() === name.toLowerCase())) {
+      setNewLabels(prev => [...prev, { name, color: newLabelColor }]);
+    }
+    setNewLabelName('');
+  };
+
+  const handleSaveLabels = async () => {
+    setSavingLabels(true);
+    try {
+      const { data } = await adminAPI.setPostLabels(labelPost._id, {
+        labelIds: selectedLabelIds,
+        newLabels
+      });
+      if (data.success) {
+        toast.success('Đã gán nhãn cho bài viết');
+        setPosts(prev => prev.map(p => p._id === labelPost._id ? { ...p, ...data.data } : p));
+        setLabelPost(null);
+        if (newLabels.length > 0) fetchLabels();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể gán nhãn');
+    } finally {
+      setSavingLabels(false);
+    }
+  };
 
   const handleStatusChange = async (postId, newStatus) => {
     try {
@@ -158,6 +226,7 @@ export default function AdminPostsPage() {
               <tr>
                 <th style={{ width: 80 }}>Ảnh</th>
                 <th>Tiêu đề & Tác giả</th>
+                <th>Nhãn</th>
                 <th>Trạng thái</th>
                 <th>Nổi bật</th>
                 <th>Thống kê</th>
@@ -191,6 +260,37 @@ export default function AdminPostsPage() {
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       Tác giả: {post.author?.fullName || 'Ẩn danh'} ({post.author?.email})
                     </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', maxWidth: 220 }}>
+                      {(post.labels || []).map((lbl) => (
+                        <span
+                          key={lbl._id}
+                          className="post-label"
+                          style={{ background: `${lbl.color}20`, color: lbl.color, border: `1px solid ${lbl.color}40`, fontSize: 11 }}
+                        >
+                          #{lbl.name}
+                        </span>
+                      ))}
+                      {post.autoLabeled && (
+                        <span
+                          className="badge badge-info"
+                          style={{ fontSize: 10, padding: '2px 8px' }}
+                          title={`Nhãn do LDA Tool tự gán (độ tương đồng ${post.autoLabelScore ?? '?'})`}
+                        >
+                          🤖 Tự động
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openLabelModal(post)}
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '2px 6px', fontSize: 12 }}
+                        title="Gán nhãn"
+                      >
+                        <FiTag /> Gán
+                      </button>
+                    </div>
                   </td>
                   <td>
                     <select
@@ -265,6 +365,95 @@ export default function AdminPostsPage() {
       ) : (
         <div className="empty-state">
           <p>Không có bài viết nào phù hợp.</p>
+        </div>
+      )}
+
+      {/* Label Assign Modal */}
+      {labelPost && (
+        <div className="modal-overlay" onClick={() => setLabelPost(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Gán nhãn bài viết</h3>
+              <button type="button" className="modal-close" onClick={() => setLabelPost(null)}>
+                <FiX />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p style={{ fontWeight: 600, marginBottom: 16 }}>{labelPost.title}</p>
+
+              <div className="form-group">
+                <label className="form-label">Chọn nhãn có sẵn</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {allLabels.map((lbl) => {
+                    const active = selectedLabelIds.includes(lbl._id);
+                    return (
+                      <button
+                        key={lbl._id}
+                        type="button"
+                        onClick={() => toggleLabel(lbl._id)}
+                        className="post-label"
+                        style={{
+                          cursor: 'pointer',
+                          background: active ? lbl.color : `${lbl.color}15`,
+                          color: active ? '#fff' : lbl.color,
+                          border: `1px solid ${lbl.color}60`,
+                          padding: '4px 12px'
+                        }}
+                      >
+                        #{lbl.name}
+                      </button>
+                    );
+                  })}
+                  {newLabels.map((lbl) => (
+                    <span
+                      key={lbl.name}
+                      className="post-label"
+                      style={{ background: lbl.color, color: '#fff', padding: '4px 12px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    >
+                      #{lbl.name} (mới)
+                      <FiX
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setNewLabels(prev => prev.filter(l => l.name !== lbl.name))}
+                      />
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Thêm nhãn mới</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Tên nhãn mới..."
+                    value={newLabelName}
+                    onChange={(e) => setNewLabelName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNewLabel(); } }}
+                  />
+                  <input
+                    type="color"
+                    value={newLabelColor}
+                    onChange={(e) => setNewLabelColor(e.target.value)}
+                    style={{ width: 44, height: 42, border: 'none', background: 'none', cursor: 'pointer' }}
+                  />
+                  <button type="button" className="btn btn-secondary" onClick={addNewLabel}>
+                    <FiPlus /> Thêm
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setLabelPost(null)} disabled={savingLabels}>
+                Hủy
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveLabels} disabled={savingLabels}>
+                {savingLabels ? 'Đang lưu...' : 'Lưu nhãn'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

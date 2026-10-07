@@ -1,4 +1,5 @@
 const Label = require('../models/label-model');
+const { notifyDataChanged } = require('../helpers/lda-tool-helper');
 
 // Create label
 module.exports.create = async (req, res) => {
@@ -72,6 +73,7 @@ module.exports.update = async (req, res) => {
     if (color) label.color = color;
 
     await label.save();
+    notifyDataChanged();
 
     res.json({
       success: true,
@@ -101,6 +103,7 @@ module.exports.delete = async (req, res) => {
     label.deleted = true;
     label.deletedAt = new Date();
     await label.save({ validateBeforeSave: false });
+    notifyDataChanged();
 
     res.json({
       success: true,

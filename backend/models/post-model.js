@@ -55,6 +55,14 @@ const postSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Nhãn do LDA Tool tự gán (false = nhãn do người dùng/admin gán)
+  autoLabeled: {
+    type: Boolean,
+    default: false
+  },
+  autoLabelScore: Number,
+  autoLabelModel: String,
+  autoLabeledAt: Date,
   deleted: {
     type: Boolean,
     default: false

@@ -3,6 +3,7 @@ const Post = require('../models/post-model');
 const Comment = require('../models/comment-model');
 const Share = require('../models/share-model');
 const { uploadToCloudinary } = require('../middlewares/upload-middleware');
+const { autoLabelPosts, notifyDataChanged } = require('../helpers/lda-tool-helper');
 
 // Create post
 module.exports.create = async (req, res) => {
@@ -43,6 +44,14 @@ module.exports.create = async (req, res) => {
     }
 
     const post = await Post.create(postData);
+
+    // Bài chưa có nhãn -> LDA Tool tự gán nhãn; có nhãn -> thêm dữ liệu huấn luyện
+    if (!post.labels || post.labels.length === 0) {
+      await autoLabelPosts([post._id]);
+    } else {
+      notifyDataChanged();
+    }
+
     const populatedPost = await Post.findById(post._id)
       .populate('author', 'fullName avatar')
       .populate('labels', 'name slug color');
@@ -326,6 +335,8 @@ module.exports.update = async (req, res) => {
     }
 
     const { title, content, excerpt, labels, status } = req.body;
+    const oldLabels = post.labels.map(String).sort().join(',');
+    const oldText = `${post.title}\n${post.content}`;
     if (title) post.title = title;
     if (content) post.content = content;
     if (excerpt) post.excerpt = excerpt;
@@ -347,7 +358,20 @@ module.exports.update = async (req, res) => {
       post.thumbnail = result.secure_url;
     }
 
+    const labelsChanged = post.labels.map(String).sort().join(',') !== oldLabels;
+    const textChanged = `${post.title}\n${post.content}` !== oldText;
+    if (labelsChanged) {
+      post.autoLabeled = false; // nhãn do người dùng chọn lại
+    }
+
     await post.save();
+
+    // Bài không còn nhãn, hoặc bài do Tool gán nhãn bị sửa nội dung -> gán lại
+    if (post.labels.length === 0 || (post.autoLabeled && textChanged)) {
+      await autoLabelPosts([post._id]);
+    } else if (labelsChanged || textChanged) {
+      notifyDataChanged();
+    }
 
     const updatedPost = await Post.findById(post._id)
       .populate('author', 'fullName avatar')
@@ -391,6 +415,7 @@ module.exports.delete = async (req, res) => {
     post.deleted = true;
     post.deletedAt = new Date();
     await post.save({ validateBeforeSave: false });
+    notifyDataChanged();
 
     res.json({
       success: true,

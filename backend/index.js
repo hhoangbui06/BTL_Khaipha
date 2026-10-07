@@ -18,6 +18,7 @@ database.connect();
 // Middleware
 const allowedOrigins = [
   'http://localhost:3000',
+  'https://btl-khaipha.vercel.app',
   process.env.CLIENT_URL,
 ].filter(Boolean);
 
@@ -25,8 +26,7 @@ app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
     if (
-      origin === 'http://localhost:3000' ||
-      (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) ||
+      allowedOrigins.includes(origin) ||
       origin.endsWith('.vercel.app')
     ) {
       return callback(null, true);
