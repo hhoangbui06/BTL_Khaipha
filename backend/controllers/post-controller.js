@@ -5,6 +5,35 @@ const Share = require('../models/share-model');
 const { uploadToCloudinary } = require('../middlewares/upload-middleware');
 const { autoLabelPosts, notifyDataChanged } = require('../helpers/lda-tool-helper');
 
+// Mỗi bài viết chỉ có đúng 1 nhãn: chuẩn hóa dữ liệu gửi lên thành mảng tối đa 1 phần tử
+const parseLabels = (labels) => {
+  let list = [];
+  if (typeof labels === 'string') {
+    try {
+      list = JSON.parse(labels);
+    } catch (e) {
+      list = labels.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  } else if (Array.isArray(labels)) {
+    list = labels;
+  }
+  if (!Array.isArray(list)) list = [list];
+  return list.filter(id => mongoose.Types.ObjectId.isValid(id)).slice(0, 1);
+};
+
+// Upload thumbnail, trả về lỗi rõ ràng thay vì "Lỗi server"
+const uploadThumbnail = async (file) => {
+  try {
+    const result = await uploadToCloudinary(file.buffer, 'blog/posts');
+    return result.secure_url;
+  } catch (error) {
+    console.error('Upload thumbnail error:', error);
+    const err = new Error(`Không thể tải ảnh thumbnail lên Cloudinary: ${error.message || 'lỗi không xác định'}`);
+    err.status = 502;
+    throw err;
+  }
+};
+
 // Create post
 module.exports.create = async (req, res) => {
   try {
@@ -26,21 +55,12 @@ module.exports.create = async (req, res) => {
     };
 
     if (labels) {
-      if (typeof labels === 'string') {
-        try {
-          postData.labels = JSON.parse(labels);
-        } catch (e) {
-          postData.labels = labels.split(',').map(s => s.trim()).filter(Boolean);
-        }
-      } else if (Array.isArray(labels)) {
-        postData.labels = labels;
-      }
+      postData.labels = parseLabels(labels);
     }
 
     // Handle thumbnail upload
     if (req.file) {
-      const result = await uploadToCloudinary(req.file.buffer, 'blog/posts');
-      postData.thumbnail = result.secure_url;
+      postData.thumbnail = await uploadThumbnail(req.file);
     }
 
     const post = await Post.create(postData);
@@ -63,9 +83,9 @@ module.exports.create = async (req, res) => {
     });
   } catch (error) {
     console.error('Create post error:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
-      message: 'Lỗi server'
+      message: error.status ? error.message : 'Lỗi server'
     });
   }
 };
@@ -341,33 +361,25 @@ module.exports.update = async (req, res) => {
     if (content) post.content = content;
     if (excerpt) post.excerpt = excerpt;
     if (status) post.status = status;
-    if (labels) {
-      if (typeof labels === 'string') {
-        try {
-          post.labels = JSON.parse(labels);
-        } catch (e) {
-          post.labels = labels.split(',').map(s => s.trim()).filter(Boolean);
-        }
-      } else if (Array.isArray(labels)) {
-        post.labels = labels;
-      }
+    if (labels !== undefined) {
+      post.labels = parseLabels(labels);
     }
 
     if (req.file) {
-      const result = await uploadToCloudinary(req.file.buffer, 'blog/posts');
-      post.thumbnail = result.secure_url;
+      post.thumbnail = await uploadThumbnail(req.file);
     }
 
     const labelsChanged = post.labels.map(String).sort().join(',') !== oldLabels;
     const textChanged = `${post.title}\n${post.content}` !== oldText;
     if (labelsChanged) {
       post.autoLabeled = false; // nhãn do người dùng chọn lại
+      if (post.labels.length > 0) post.autoLabelDisabled = false;
     }
 
     await post.save();
 
-    // Bài không còn nhãn, hoặc bài do Tool gán nhãn bị sửa nội dung -> gán lại
-    if (post.labels.length === 0 || (post.autoLabeled && textChanged)) {
+    // Chỉ bài chưa có nhãn mới được Tool gán; bài đã có nhãn giữ nguyên
+    if (post.labels.length === 0) {
       await autoLabelPosts([post._id]);
     } else if (labelsChanged || textChanged) {
       notifyDataChanged();
@@ -384,9 +396,9 @@ module.exports.update = async (req, res) => {
     });
   } catch (error) {
     console.error('Update post error:', error);
-    res.status(500).json({
+    res.status(error.status || 500).json({
       success: false,
-      message: 'Lỗi server'
+      message: error.status ? error.message : 'Lỗi server'
     });
   }
 };

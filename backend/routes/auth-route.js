@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/auth-controller');
 const { requireAuth } = require('../middlewares/auth-middleware');
-const { upload } = require('../middlewares/upload-middleware');
+const { uploadSingle } = require('../middlewares/upload-middleware');
 
 // Public routes
 router.post('/register', authController.register);
@@ -19,7 +19,7 @@ router.get('/me', requireAuth, authController.getMe);
 router.post('/logout', requireAuth, authController.logout);
 router.patch('/update-profile', requireAuth, authController.updateProfile);
 router.patch('/change-password', requireAuth, authController.changePassword);
-router.patch('/update-avatar', requireAuth, upload.single('avatar'), async (req, res) => {
+router.patch('/update-avatar', requireAuth, uploadSingle('avatar'), async (req, res) => {
   try {
     const { uploadToCloudinary } = require('../middlewares/upload-middleware');
     if (!req.file) {

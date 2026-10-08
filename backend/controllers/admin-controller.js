@@ -270,21 +270,30 @@ module.exports.setPostLabels = async (req, res) => {
       });
     }
 
-    const ids = (await Label.find({ _id: { $in: labelIds }, deleted: false }).select('_id'))
-      .map(l => l._id.toString());
-
-    for (const item of newLabels) {
-      const name = (item.name || '').trim();
-      if (!name) continue;
-      let label = await Label.findOne({ name, deleted: false });
+    // Mỗi bài viết chỉ có đúng 1 nhãn: ưu tiên nhãn mới tạo, sau đó tới nhãn có sẵn
+    let labelId = null;
+    const newLabel = newLabels.find(item => (item.name || '').trim());
+    if (newLabel) {
+      const name = newLabel.name.trim();
+      let label = await Label.findOne({ name });
       if (!label) {
-        label = await Label.create({ name, color: item.color || '#6366f1', description: item.description || '' });
+        label = await Label.create({ name, color: newLabel.color || '#6366f1', description: newLabel.description || '' });
+      } else if (label.deleted) {
+        // Tên trùng với nhãn đã xóa mềm -> khôi phục lại nhãn đó
+        label.deleted = false;
+        label.deletedAt = undefined;
+        label.color = newLabel.color || label.color;
+        await label.save();
       }
-      ids.push(label._id.toString());
+      labelId = label._id;
+    } else if (labelIds.length > 0) {
+      const label = await Label.findOne({ _id: labelIds[0], deleted: false }).select('_id');
+      labelId = label ? label._id : null;
     }
 
-    post.labels = [...new Set(ids)];
+    post.labels = labelId ? [labelId] : [];
     post.autoLabeled = false; // admin đã xác nhận nhãn
+    post.autoLabelDisabled = !labelId; // admin bỏ trống nhãn -> Tool không tự gán lại
     post.autoLabelScore = undefined;
     post.autoLabelModel = undefined;
     await post.save({ validateBeforeSave: false });
@@ -301,6 +310,41 @@ module.exports.setPostLabels = async (req, res) => {
     });
   } catch (error) {
     console.error('Set post labels error:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server' });
+  }
+};
+
+// Remove label of a post (admin) - Tool sẽ không tự gán lại nhãn cho bài này
+module.exports.removePostLabels = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post || post.deleted) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bài viết không tồn tại'
+      });
+    }
+
+    post.labels = [];
+    post.autoLabeled = false;
+    post.autoLabelDisabled = true;
+    post.autoLabelScore = undefined;
+    post.autoLabelModel = undefined;
+    post.autoLabeledAt = undefined;
+    await post.save({ validateBeforeSave: false });
+    notifyDataChanged();
+
+    const updatedPost = await Post.findById(post._id)
+      .populate('author', 'fullName avatar email')
+      .populate('labels', 'name slug color');
+
+    res.json({
+      success: true,
+      message: 'Đã xóa nhãn của bài viết',
+      data: updatedPost
+    });
+  } catch (error) {
+    console.error('Remove post labels error:', error);
     res.status(500).json({ success: false, message: 'Lỗi server' });
   }
 };

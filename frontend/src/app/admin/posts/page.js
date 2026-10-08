@@ -14,7 +14,8 @@ import {
   FiExternalLink,
   FiTag,
   FiX,
-  FiPlus
+  FiPlus,
+  FiSlash
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -76,13 +77,15 @@ export default function AdminPostsPage() {
 
   const openLabelModal = (post) => {
     setLabelPost(post);
-    setSelectedLabelIds((post.labels || []).map(l => (typeof l === 'object' ? l._id : l)));
+    setSelectedLabelIds((post.labels || []).slice(0, 1).map(l => (typeof l === 'object' ? l._id : l)));
     setNewLabels([]);
     setNewLabelName('');
   };
 
+  // Mỗi bài viết chỉ có đúng 1 nhãn: chọn nhãn khác sẽ thay thế, bấm lại để bỏ chọn
   const toggleLabel = (id) => {
-    setSelectedLabelIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    setNewLabels([]);
+    setSelectedLabelIds(prev => (prev.includes(id) ? [] : [id]));
   };
 
   const addNewLabel = () => {
@@ -90,9 +93,11 @@ export default function AdminPostsPage() {
     if (!name) return;
     const existing = allLabels.find(l => l.name.toLowerCase() === name.toLowerCase());
     if (existing) {
-      if (!selectedLabelIds.includes(existing._id)) toggleLabel(existing._id);
-    } else if (!newLabels.some(l => l.name.toLowerCase() === name.toLowerCase())) {
-      setNewLabels(prev => [...prev, { name, color: newLabelColor }]);
+      setNewLabels([]);
+      setSelectedLabelIds([existing._id]);
+    } else {
+      setSelectedLabelIds([]);
+      setNewLabels([{ name, color: newLabelColor }]);
     }
     setNewLabelName('');
   };
@@ -118,6 +123,21 @@ export default function AdminPostsPage() {
       toast.error(error.response?.data?.message || 'Không thể gán nhãn');
     } finally {
       setSavingLabels(false);
+    }
+  };
+
+  const handleRemoveLabels = async (post) => {
+    if (!confirm(`Xóa nhãn của bài viết "${post.title}"?
+Tool sẽ không tự gán lại nhãn cho bài này cho tới khi bạn gán nhãn mới.`)) return;
+
+    try {
+      const { data } = await adminAPI.removePostLabels(post._id);
+      if (data.success) {
+        toast.success('Đã xóa nhãn của bài viết');
+        setPosts(prev => prev.map(p => p._id === post._id ? { ...p, ...data.data } : p));
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể xóa nhãn');
     }
   };
 
@@ -294,6 +314,17 @@ export default function AdminPostsPage() {
                       >
                         <FiTag /> Gán
                       </button>
+                      {post.labels?.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveLabels(post)}
+                          className="btn btn-ghost btn-sm"
+                          style={{ padding: '2px 6px', fontSize: 12, color: 'var(--error)' }}
+                          title="Xóa nhãn của bài viết"
+                        >
+                          <FiSlash /> Xóa
+                        </button>
+                      )}
                     </div>
                   </td>
                   <td>
@@ -387,7 +418,7 @@ export default function AdminPostsPage() {
               <p style={{ fontWeight: 600, marginBottom: 16 }}>{labelPost.title}</p>
 
               <div className="form-group">
-                <label className="form-label">Chọn nhãn có sẵn</label>
+                <label className="form-label">Chọn 1 nhãn có sẵn</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {allLabels.map((lbl) => {
                     const active = selectedLabelIds.includes(lbl._id);
@@ -426,7 +457,7 @@ export default function AdminPostsPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Thêm nhãn mới</label>
+                <label className="form-label">Hoặc tạo nhãn mới (thay thế nhãn đang chọn)</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input
                     type="text"

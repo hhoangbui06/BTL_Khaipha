@@ -1,13 +1,14 @@
 """Nghiệp vụ của Tool: đọc dữ liệu từ MongoDB, huấn luyện, gán nhãn tự động.
 
-- Dữ liệu huấn luyện: các bài viết chưa xóa, có ít nhất 1 nhãn còn tồn tại,
-  nhãn do con người gán (autoLabeled != true) và KHÔNG chứa ảnh trong nội dung.
-- Nhãn chưa có bài viết hợp lệ nào sẽ bị bỏ qua.
+- Dữ liệu huấn luyện: các bài viết chưa xóa, có nhãn còn tồn tại do con người
+  gán (autoLabeled != true). Tool chỉ đọc chữ của tiêu đề + nội dung, bỏ qua ảnh.
+  Mỗi bài viết chỉ có đúng 1 nhãn (bài cũ có nhiều nhãn thì lấy nhãn đầu tiên).
+- Nhãn chưa có bài viết nào sẽ bị bỏ qua.
 - Mỗi lần được gọi, Tool tính "dấu vân tay" (fingerprint) của dữ liệu huấn luyện.
   Nếu bài viết / nhãn thay đổi thì fingerprint đổi -> tự động huấn luyện lại.
-- Bài viết chưa có nhãn (hoặc chỉ còn nhãn đã bị xóa) được gán 1 nhãn và đánh
-  dấu autoLabeled = true. Khi mô hình đổi, các bài tự gán sẽ được gán lại.
-  Nhãn do con người gán không bao giờ bị ghi đè.
+- Chỉ bài viết CHƯA có nhãn (hoặc chỉ còn nhãn đã bị xóa) mới được gán 1 nhãn và
+  đánh dấu autoLabeled = true. Bài đã có nhãn (do người hay do Tool gán) không
+  bao giờ bị gán lại.
 """
 import hashlib
 import random
@@ -53,17 +54,18 @@ def collect_training_data(db):
 
     posts, excluded_image = [], 0
     for post in cursor:
-        if has_image(post.get("content", "")):
+        if config.EXCLUDE_IMAGE_POSTS and has_image(post.get("content", "")):
             excluded_image += 1
             continue
-        post_labels = sorted({str(l) for l in post.get("labels", []) if str(l) in labels})
-        if post_labels:
+        # Mỗi bài viết chỉ có 1 nhãn: lấy nhãn đầu tiên còn tồn tại
+        label_id = next((str(l) for l in post.get("labels", []) if str(l) in labels), None)
+        if label_id:
             posts.append(
                 {
                     "id": str(post["_id"]),
                     "title": post.get("title", ""),
                     "content": post.get("content", ""),
-                    "labels": post_labels,
+                    "labels": [label_id],
                 }
             )
 
@@ -92,7 +94,8 @@ def fingerprint(data):
     h = hashlib.sha1()
     h.update(
         f"{config.ALGORITHM_VERSION}|{config.NUM_TOPICS}|{config.MAX_ITER}|{config.DOC_TOPIC_PRIOR}|"
-        f"{config.TOPIC_WORD_PRIOR}|{config.TITLE_WEIGHT}|{config.USE_LABEL_TEXT}".encode()
+        f"{config.TOPIC_WORD_PRIOR}|{config.TITLE_WEIGHT}|{config.USE_LABEL_TEXT}|"
+        f"{config.EXCLUDE_IMAGE_POSTS}".encode()
     )
     for label_id in data["trainable_labels"]:
         label = data["labels"][label_id]
@@ -182,11 +185,12 @@ def ensure_model(force=False):
 
 
 # ----------------------------------------------------------------- labeling
-def label_posts(post_ids=None, force_relabel=False):
-    """Gán nhãn cho bài chưa có nhãn (hoặc bài do Tool tự gán khi mô hình đổi).
+def label_posts(post_ids=None):
+    """Gán đúng 1 nhãn cho các bài CHƯA có nhãn (hoặc chỉ còn nhãn đã bị xóa).
 
     post_ids: chỉ xử lý các bài này (dùng khi backend vừa tạo/sửa bài);
     None: quét toàn bộ cơ sở dữ liệu.
+    Bài đã có nhãn (do người hay do Tool gán) luôn được giữ nguyên.
     """
     db = get_db()
     model, meta = ensure_model()
@@ -194,26 +198,18 @@ def label_posts(post_ids=None, force_relabel=False):
         return {"ready": False, "reason": meta.get("reason"), "labeled": []}
 
     model_fp = meta["fingerprint"]
-    active_ids = _object_ids(load_active_labels(db).keys())
-    query = {"deleted": {"$ne": True}}
+    labels = load_active_labels(db)
+    # $nin: bài không có nhãn nào thuộc danh sách nhãn còn tồn tại
+    query = {
+        "deleted": {"$ne": True},
+        "autoLabelDisabled": {"$ne": True},  # admin đã chủ động xóa nhãn -> bỏ qua
+        "labels": {"$nin": _object_ids(labels.keys())},
+    }
     if post_ids:
         query["_id"] = {"$in": _object_ids(post_ids)}
-    elif force_relabel:
-        query["$or"] = [{"labels": {"$nin": active_ids}}, {"autoLabeled": True}]
-    else:
-        query["$or"] = [
-            {"labels": {"$nin": active_ids}},
-            {"autoLabeled": True, "autoLabelModel": {"$ne": model_fp}},
-        ]
 
-    active = set(map(str, active_ids))
-    labels = load_active_labels(db)
     results = []
-    for post in db.posts.find(query, {"title": 1, "content": 1, "labels": 1, "autoLabeled": 1}):
-        has_human_label = not post.get("autoLabeled") and any(str(l) in active for l in post.get("labels", []))
-        if has_human_label:
-            continue  # không ghi đè nhãn do con người gán
-
+    for post in db.posts.find(query, {"title": 1, "content": 1}):
         prediction = model.predict(post_tokens(post.get("title"), post.get("content")))
         if prediction is None:
             results.append({"postId": str(post["_id"]), "skipped": "Không có từ nào thuộc bộ từ vựng"})
@@ -245,9 +241,9 @@ def label_posts(post_ids=None, force_relabel=False):
 
 
 def sync(force_train=False):
-    """Đồng bộ toàn bộ: huấn luyện lại nếu cần rồi gán nhãn cho các bài còn thiếu."""
+    """Đồng bộ toàn bộ: huấn luyện lại nếu cần rồi gán nhãn cho các bài chưa có nhãn."""
     model, meta = ensure_model(force=force_train)
-    result = label_posts(force_relabel=force_train) if model is not None else {
+    result = label_posts() if model is not None else {
         "ready": False,
         "reason": meta.get("reason"),
         "labeled": [],

@@ -77,7 +77,8 @@ export default function AdminLdaPage() {
             Tự động gán nhãn (LDA)
           </h1>
           <p className="page-subtitle">
-            Tool học từ các bài viết đã có nhãn (không chứa ảnh) và tự gán nhãn cho bài viết mới.
+            Tool học từ tiêu đề và nội dung chữ (bỏ qua ảnh) của các bài viết đã có nhãn, rồi tự gán
+            đúng 1 nhãn cho bài viết chưa có nhãn. Bài đã có nhãn được giữ nguyên.
             Tool tự huấn luyện lại khi bài viết hoặc nhãn thay đổi.
           </p>
         </div>
@@ -128,7 +129,9 @@ export default function AdminLdaPage() {
               <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Dữ liệu huấn luyện</div>
               <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{info.trainingPosts} bài viết</div>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-                Loại {info.excludedImagePosts} bài có ảnh
+                {info.excludedImagePosts > 0
+                  ? `Loại ${info.excludedImagePosts} bài có ảnh`
+                  : 'Chỉ đọc tiêu đề + nội dung chữ, bỏ qua ảnh'}
               </p>
             </div>
             <div className="card">

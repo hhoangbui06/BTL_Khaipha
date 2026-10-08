@@ -20,6 +20,7 @@ router.get('/posts', requireRole('admin', 'admin_posts'), adminController.getAll
 router.put('/posts/:id', requireRole('admin', 'admin_posts'), adminController.updatePostStatus);
 router.delete('/posts/:id', requireRole('admin', 'admin_posts'), adminController.deletePost);
 router.put('/posts/:id/labels', requireRole('admin', 'admin_posts'), adminController.setPostLabels);
+router.delete('/posts/:id/labels', requireRole('admin', 'admin_posts'), adminController.removePostLabels);
 
 // LDA auto-label tool
 router.get('/lda/status', requireRole('admin', 'admin_posts'), adminController.getLdaStatus);

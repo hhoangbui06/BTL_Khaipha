@@ -63,6 +63,11 @@ const postSchema = new mongoose.Schema({
   autoLabelScore: Number,
   autoLabelModel: String,
   autoLabeledAt: Date,
+  // Admin đã xóa nhãn của bài -> LDA Tool không tự gán lại cho tới khi admin gán nhãn mới
+  autoLabelDisabled: {
+    type: Boolean,
+    default: false
+  },
   deleted: {
     type: Boolean,
     default: false

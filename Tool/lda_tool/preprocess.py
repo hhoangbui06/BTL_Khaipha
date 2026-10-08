@@ -1,6 +1,9 @@
 """Tiền xử lý văn bản tiếng Việt cho LDA.
 
-Quy trình: bỏ HTML -> chuẩn hóa Unicode (NFC) + chữ thường -> bỏ URL/email/số/
+Tool chỉ đọc CHỮ của tiêu đề và nội dung: ảnh (thẻ <img>, ảnh markdown,
+data:image) và thumbnail không bao giờ được đọc.
+
+Quy trình: bỏ ảnh + HTML -> chuẩn hóa Unicode (NFC) + chữ thường -> bỏ URL/email/số/
 ký tự đặc biệt -> tách từ tiếng Việt bằng pyvi (vd: "trí tuệ nhân tạo" ->
 "trí_tuệ nhân_tạo") -> loại stopword và token quá ngắn.
 """
@@ -13,6 +16,8 @@ from pathlib import Path
 from . import config
 
 IMAGE_PATTERN = re.compile(r"<img\b|!\[[^\]]*\]\([^)]*\)|data:image/", re.IGNORECASE)
+IMG_TAG_PATTERN = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
+MARKDOWN_IMAGE_PATTERN = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 SCRIPT_STYLE_PATTERN = re.compile(r"<(script|style)\b.*?</\1>", re.IGNORECASE | re.DOTALL)
 TAG_PATTERN = re.compile(r"<[^>]+>")
 URL_PATTERN = re.compile(r"(https?://|www\.)\S+", re.IGNORECASE)
@@ -25,7 +30,7 @@ STOPWORDS_FILE = Path(__file__).resolve().parent / "resources" / "vietnamese-sto
 
 
 def has_image(content):
-    """Bài viết có chứa ảnh trong nội dung hay không (bị loại khỏi dữ liệu huấn luyện)."""
+    """Bài viết có chứa ảnh trong nội dung hay không."""
     return bool(content) and bool(IMAGE_PATTERN.search(content))
 
 
@@ -50,7 +55,10 @@ def _tokenizer():
 
 
 def html_to_text(content):
+    """Lấy phần chữ của nội dung HTML, bỏ toàn bộ ảnh."""
     text = SCRIPT_STYLE_PATTERN.sub(" ", content or "")
+    text = IMG_TAG_PATTERN.sub(" ", text)
+    text = MARKDOWN_IMAGE_PATTERN.sub(" ", text)
     text = TAG_PATTERN.sub(" ", text)
     return html.unescape(text)
 

@@ -17,6 +17,7 @@ import {
   FiX
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import { compressImage, MAX_UPLOAD_BYTES } from '@/lib/image';
 
 export default function EditPostPage() {
   const { id } = useParams();
@@ -65,7 +66,7 @@ export default function EditPostPage() {
           setThumbnailPreview(p.thumbnail || '');
           setPostSlug(p.slug || '');
           if (p.labels) {
-            setSelectedLabels(p.labels.map(l => typeof l === 'object' ? l._id : l));
+            setSelectedLabels(p.labels.slice(0, 1).map(l => typeof l === 'object' ? l._id : l));
           }
         }
       } catch (error) {
@@ -80,22 +81,27 @@ export default function EditPostPage() {
     fetchData();
   }, [id, user, router]);
 
-  const handleThumbnailChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Ảnh không được vượt quá 5MB');
-        return;
-      }
-      setThumbnailFile(file);
-      setThumbnailPreview(URL.createObjectURL(file));
+  const handleThumbnailChange = async (e) => {
+    const original = e.target.files[0];
+    if (!original) return;
+    let file = original;
+    try {
+      file = await compressImage(original);
+    } catch (error) {
+      toast.error(error.message);
+      return;
     }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error('Ảnh quá lớn (tối đa 4MB sau khi nén), vui lòng chọn ảnh khác');
+      return;
+    }
+    setThumbnailFile(file);
+    setThumbnailPreview(URL.createObjectURL(file));
   };
 
+  // Mỗi bài viết chỉ có đúng 1 nhãn: chọn nhãn khác sẽ thay thế, bấm lại để bỏ chọn
   const handleToggleLabel = (labelId) => {
-    setSelectedLabels(prev => 
-      prev.includes(labelId) ? prev.filter(i => i !== labelId) : [...prev, labelId]
-    );
+    setSelectedLabels(prev => (prev.includes(labelId) ? [] : [labelId]));
   };
 
   const handleSubmit = async (e) => {

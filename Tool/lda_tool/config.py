@@ -58,6 +58,9 @@ MIN_LABELS = _int("LDA_MIN_LABELS", 2)
 TITLE_WEIGHT = _int("LDA_TITLE_WEIGHT", 2)
 # Dùng thêm tên + mô tả của nhãn (đã có bài viết) làm 1 "tài liệu mồi"
 USE_LABEL_TEXT = _bool("LDA_USE_LABEL_TEXT", True)
+# Mặc định chỉ đọc chữ của tiêu đề + nội dung (bỏ qua ảnh) nên không loại bài có ảnh.
+# Đặt true nếu muốn loại hẳn các bài có ảnh trong nội dung khỏi dữ liệu huấn luyện.
+EXCLUDE_IMAGE_POSTS = _bool("LDA_EXCLUDE_IMAGE_POSTS", False)
 
 # Đổi giá trị này khi thay đổi thuật toán/tiền xử lý để buộc huấn luyện lại
-ALGORITHM_VERSION = "lda-centroid-v1"
+ALGORITHM_VERSION = "lda-centroid-v2"

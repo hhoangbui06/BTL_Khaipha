@@ -1,6 +1,7 @@
 # LDA Tool – Tự động gán nhãn bài viết
 
-Tool Python dùng **LDA (Latent Dirichlet Allocation)** để tự gán **1 nhãn** cho bài viết chưa có nhãn.
+Tool Python dùng **LDA (Latent Dirichlet Allocation)** để tự gán **đúng 1 nhãn** cho bài viết chưa có nhãn.
+Bài viết đã có nhãn (do người hoặc do Tool gán) không bao giờ bị gán lại.
 Tool đọc trực tiếp MongoDB của website, tự huấn luyện lại khi dữ liệu thay đổi và được deploy lên Vercel
 như một project riêng (Root Directory = `Tool`).
 
@@ -23,8 +24,10 @@ Tool/
 
 ## Thuật toán
 
-1. **Dữ liệu huấn luyện**: bài viết chưa xóa, có nhãn do người dùng/admin gán (`autoLabeled != true`),
-   **không chứa ảnh trong nội dung** (`<img>`, ảnh markdown, `data:image`). Nhãn chưa có bài viết hợp lệ bị bỏ qua.
+1. **Dữ liệu huấn luyện**: bài viết chưa xóa, có nhãn do người dùng/admin gán (`autoLabeled != true`).
+   Tool **chỉ đọc chữ của tiêu đề + nội dung**; ảnh (`<img>`, ảnh markdown, `data:image`) và thumbnail bị bỏ qua.
+   Mỗi bài chỉ có 1 nhãn (bài cũ nhiều nhãn thì lấy nhãn đầu tiên). Nhãn chưa có bài viết bị bỏ qua.
+   Muốn loại hẳn bài có ảnh khỏi dữ liệu huấn luyện: đặt `LDA_EXCLUDE_IMAGE_POSTS=true`.
 2. **Tiền xử lý**: bỏ HTML → chuẩn hóa Unicode NFC, chữ thường → bỏ URL/email/số/ký tự đặc biệt →
    **tách từ tiếng Việt bằng `pyvi`** (`trí tuệ nhân tạo` → `trí_tuệ nhân_tạo`) → bỏ stopword.
    Tiêu đề được nhân trọng số 2. Tên + mô tả của nhãn được thêm làm 1 “tài liệu mồi”.
@@ -34,6 +37,7 @@ Tool/
    là trung bình θ các bài thuộc L.
 5. **Gán nhãn**: bài mới → suy luận θ_new (E-step VB, cài bằng numpy) → chọn nhãn có
    `cosine(θ_new, centroid_L)` lớn nhất. Lưu `autoLabeled=true`, `autoLabelScore` vào bài viết.
+   Chỉ bài **chưa có nhãn** (hoặc chỉ còn nhãn đã bị xóa) mới được gán.
 
 Mô hình được lưu trong collection `lda_models` (mảng numpy dạng `.npy`), nên không phụ thuộc phiên bản pickle.
 
@@ -42,13 +46,13 @@ Mô hình được lưu trong collection `lda_models` (mảng numpy dạng `.npy
 | Sự kiện | Ai kích hoạt | Tool làm gì |
 | --- | --- | --- |
 | Đăng bài không chọn nhãn | backend gọi `POST /api/predict` | gán nhãn ngay (chờ tối đa 8s, sau đó chạy nền) |
-| Sửa bài do Tool gán nhãn / xóa hết nhãn | backend gọi `POST /api/predict` | gán lại nhãn |
-| Admin gán nhãn, tạo nhãn mới, sửa/xóa nhãn, sửa/xóa bài | backend gọi `POST /api/sync` (chạy nền) | huấn luyện lại nếu dữ liệu đổi, gán lại các bài tự gán |
+| Sửa bài và bỏ hết nhãn | backend gọi `POST /api/predict` | gán nhãn (vì bài không còn nhãn) |
+| Admin gán nhãn, tạo nhãn mới, sửa/xóa nhãn, sửa/xóa bài | backend gọi `POST /api/sync` (chạy nền) | huấn luyện lại nếu dữ liệu đổi, gán nhãn cho bài chưa có nhãn |
 | Hằng ngày 00:00 UTC | **Vercel Cron** gọi `GET /api/sync` | đồng bộ toàn bộ (lưới an toàn) |
 
 Tool dùng **fingerprint** (SHA-1 của nội dung + nhãn của toàn bộ dữ liệu huấn luyện). Mỗi lần được gọi,
 nếu fingerprint khác với mô hình đã lưu thì Tool tự huấn luyện lại trước khi dự đoán, nên mô hình luôn khớp
-với dữ liệu mới nhất. Nhãn do con người gán **không bao giờ bị Tool ghi đè**; khi admin gán lại nhãn cho bài
+với dữ liệu mới nhất. Bài đã có nhãn **không bao giờ bị Tool gán lại**; khi admin gán lại nhãn cho bài
 tự gán, bài đó trở thành dữ liệu huấn luyện.
 
 ## API

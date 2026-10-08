@@ -136,6 +136,7 @@ export const adminAPI = {
   getPosts: (params) => api.get('/admin/posts', { params }),
   updatePost: (id, data) => api.put(`/admin/posts/${id}`, data),
   setPostLabels: (id, data) => api.put(`/admin/posts/${id}/labels`, data),
+  removePostLabels: (id) => api.delete(`/admin/posts/${id}/labels`),
   getLdaStatus: () => api.get('/admin/lda/status'),
   syncLda: (force = false) => api.post('/admin/lda/sync', { force }),
   predictLda: (data) => api.post('/admin/lda/predict', data),

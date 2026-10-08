@@ -17,6 +17,7 @@ import {
   FiX
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import { compressImage, MAX_UPLOAD_BYTES } from '@/lib/image';
 
 export default function CreatePostPage() {
   const router = useRouter();
@@ -50,22 +51,27 @@ export default function CreatePostPage() {
   }, []);
 
   // Handle file select
-  const handleThumbnailChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Ảnh không được vượt quá 5MB');
-        return;
-      }
-      setThumbnailFile(file);
-      setThumbnailPreview(URL.createObjectURL(file));
+  const handleThumbnailChange = async (e) => {
+    const original = e.target.files[0];
+    if (!original) return;
+    let file = original;
+    try {
+      file = await compressImage(original);
+    } catch (error) {
+      toast.error(error.message);
+      return;
     }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error('Ảnh quá lớn (tối đa 4MB sau khi nén), vui lòng chọn ảnh khác');
+      return;
+    }
+    setThumbnailFile(file);
+    setThumbnailPreview(URL.createObjectURL(file));
   };
 
+  // Mỗi bài viết chỉ có đúng 1 nhãn: chọn nhãn khác sẽ thay thế, bấm lại để bỏ chọn
   const handleToggleLabel = (labelId) => {
-    setSelectedLabels(prev => 
-      prev.includes(labelId) ? prev.filter(id => id !== labelId) : [...prev, labelId]
-    );
+    setSelectedLabels(prev => (prev.includes(labelId) ? [] : [labelId]));
   };
 
   const handleSubmit = async (e) => {
@@ -240,7 +246,7 @@ export default function CreatePostPage() {
                     Chủ đề & Nhãn (Labels)
                   </label>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-                    Chọn các chủ đề phù hợp cho bài viết (nhãn do Ban Quản trị thiết lập)
+                    Chọn 1 chủ đề cho bài viết. Nếu bỏ trống, hệ thống sẽ tự động gán nhãn phù hợp
                   </p>
                 </div>
 
