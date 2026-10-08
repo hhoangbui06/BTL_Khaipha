@@ -1822,6 +1822,83 @@ a:hover {
 
 
 /* ========================================
+   POST CARD - MENU 3 CHẤM
+======================================== */
+
+.post-card {
+  position: relative;
+}
+
+.post-card-menu {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+}
+
+.post-card-menu-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-full);
+  background: rgba(15, 23, 42, 0.55);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background var(--transition-base);
+}
+
+.post-card-menu-btn:hover,
+.post-card-menu-btn[aria-expanded="true"] {
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.post-card-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 170px;
+  padding: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  animation: scaleIn 0.15s ease;
+}
+
+.post-card-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.post-card-menu-item:hover {
+  background: var(--bg-card-hover);
+}
+
+.post-card-menu-item.danger {
+  color: var(--error);
+}
+
+.post-card-menu-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ========================================
    ADMIN - LABEL POSTS & POST PREVIEW
 ======================================== */
 

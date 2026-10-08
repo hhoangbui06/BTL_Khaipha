@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -13,7 +13,8 @@ import {
   FiCalendar, 
   FiCornerDownRight,
   FiTrash2,
-  FiEdit2
+  FiEdit2,
+  FiMoreHorizontal
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -40,8 +41,29 @@ export default function PostCard({
   const [shareCount, setShareCount] = useState(post?.shareCount || 0);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+  const menuRef = useRef(null);
 
-  if (!post) return null;
+  // Đóng menu 3 chấm khi bấm ra ngoài hoặc nhấn Esc
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [menuOpen]);
+
+  if (!post || deleted) return null;
 
   const handleLike = async (e) => {
     e.preventDefault();
@@ -82,6 +104,33 @@ export default function PostCard({
     setShareModalOpen(true);
   };
 
+  const handleDeleteFromMenu = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuOpen(false);
+
+    // Trang cha tự xử lý xóa (vd: trang cá nhân cần tải lại tường)
+    if (onDelete) {
+      onDelete(post._id);
+      return;
+    }
+
+    if (!confirm(`Bạn có chắc chắn muốn xóa bài viết "${post.title}"?`)) return;
+
+    setDeleting(true);
+    try {
+      const { data } = await postAPI.delete(post._id);
+      if (data.success) {
+        toast.success('Đã xóa bài viết');
+        setDeleted(true);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể xóa bài viết');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return '';
     try {
@@ -100,6 +149,40 @@ export default function PostCard({
   return (
     <>
       <div className="post-card">
+        {/* Menu 3 chấm (tác giả hoặc admin) */}
+        {isAuthorOrAdmin && !isShared && (
+          <div className="post-card-menu" ref={menuRef}>
+            <button
+              type="button"
+              className="post-card-menu-btn"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setMenuOpen((open) => !open);
+              }}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              title="Tùy chọn"
+            >
+              <FiMoreHorizontal />
+            </button>
+
+            {menuOpen && (
+              <div className="post-card-menu-dropdown" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="post-card-menu-item danger"
+                  onClick={handleDeleteFromMenu}
+                  disabled={deleting}
+                >
+                  <FiTrash2 /> {deleting ? 'Đang xóa...' : 'Xóa bài viết'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Shared banner if this is a share on user's wall */}
         {isShared && (
           <div style={{
