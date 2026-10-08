@@ -31,11 +31,18 @@ Tool/
 2. **Tiền xử lý**: bỏ HTML → chuẩn hóa Unicode NFC, chữ thường → bỏ URL/email/số/ký tự đặc biệt →
    **tách từ tiếng Việt bằng `pyvi`** (`trí tuệ nhân tạo` → `trí_tuệ nhân_tạo`) → bỏ stopword.
    Tiêu đề được nhân trọng số 2. Tên + mô tả của nhãn được thêm làm 1 “tài liệu mồi”.
-3. **LDA**: Bag-of-Words (`CountVectorizer`) → `LatentDirichletAllocation` (Variational Bayes, scikit-learn)
-   với K = số nhãn có dữ liệu (đổi bằng `LDA_NUM_TOPICS`), α = 1/K, η = 0.01.
-4. **Ánh xạ chủ đề → nhãn**: suy luận phân phối chủ đề θ của từng bài; *centroid* của nhãn L
+3. **LDA – Collapsed Gibbs Sampling** (Griffiths & Steyvers, 2004), tự cài đặt trong `lda_model.py`:
+   Bag-of-Words (`CountVectorizer`) → mỗi từ được gán ngẫu nhiên 1 chủ đề → lặp nhiều vòng, mỗi vòng
+   lấy mẫu lại chủ đề cho từng từ theo
+   `P(z_i = k) ∝ (n_dk + α) · (n_kw + η) / (n_k + V·η)`
+   (bỏ phép gán hiện tại của từ khỏi bộ đếm trước khi tính). Bỏ 200 vòng đầu (burn-in), sau đó cứ
+   10 vòng lấy 1 mẫu để ước lượng `φ_kw = (n_kw + η)/(n_k + V·η)` và `θ_dk = (n_dk + α)/(N_d + K·α)`.
+   K = số nhãn có dữ liệu (đổi bằng `LDA_NUM_TOPICS`), α = 1/K, η = 0.01, tối đa 500 vòng,
+   giới hạn 40 giây để không vượt thời gian chạy của Vercel.
+4. **Ánh xạ chủ đề → nhãn**: lấy θ của từng bài từ quá trình lấy mẫu; *centroid* của nhãn L
    là trung bình θ các bài thuộc L.
-5. **Gán nhãn**: bài mới → suy luận θ_new (E-step VB, cài bằng numpy) → chọn nhãn có
+5. **Gán nhãn**: bài mới → suy luận θ_new bằng Gibbs *fold-in* (giữ φ cố định, lấy mẫu
+   `P(z_i = k) ∝ (n_dk + α) · φ_kw`, 100 vòng, bỏ 50 vòng đầu) → chọn nhãn có
    `cosine(θ_new, centroid_L)` lớn nhất. Lưu `autoLabeled=true`, `autoLabelScore` vào bài viết.
    Chỉ bài **chưa có nhãn** (hoặc chỉ còn nhãn đã bị xóa) mới được gán.
 
@@ -103,4 +110,4 @@ LDA_TOOL_SECRET=<giống TOOL_SECRET, có thể bỏ trống khi chạy local>
 
 LDA là mô hình thống kê: cần **nhiều bài có nhãn** (khuyến nghị ≥ 10 bài/nhãn, mỗi bài ≥ 100 từ) để chủ đề
 có ý nghĩa. Dùng `python cli.py evaluate` để đo độ chính xác khi dữ liệu tăng và chỉnh `LDA_NUM_TOPICS`,
-`LDA_MAX_ITER`, `LDA_ALPHA` trong biến môi trường.
+`LDA_GIBBS_ITER`, `LDA_GIBBS_BURN_IN`, `LDA_ALPHA` trong biến môi trường.

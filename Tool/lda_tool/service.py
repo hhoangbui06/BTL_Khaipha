@@ -93,9 +93,10 @@ def collect_training_data(db):
 def fingerprint(data):
     h = hashlib.sha1()
     h.update(
-        f"{config.ALGORITHM_VERSION}|{config.NUM_TOPICS}|{config.MAX_ITER}|{config.DOC_TOPIC_PRIOR}|"
-        f"{config.TOPIC_WORD_PRIOR}|{config.TITLE_WEIGHT}|{config.USE_LABEL_TEXT}|"
-        f"{config.EXCLUDE_IMAGE_POSTS}".encode()
+        f"{config.ALGORITHM_VERSION}|{config.NUM_TOPICS}|{config.DOC_TOPIC_PRIOR}|"
+        f"{config.TOPIC_WORD_PRIOR}|{config.GIBBS_ITER}|{config.GIBBS_BURN_IN}|{config.GIBBS_THIN}|"
+        f"{config.INFER_ITER}|{config.INFER_BURN_IN}|{config.RANDOM_STATE}|"
+        f"{config.TITLE_WEIGHT}|{config.USE_LABEL_TEXT}|{config.EXCLUDE_IMAGE_POSTS}".encode()
     )
     for label_id in data["trainable_labels"]:
         label = data["labels"][label_id]
@@ -143,7 +144,7 @@ def _train(db, data, fp):
     model = None
     if len(data["trainable_labels"]) < config.MIN_LABELS:
         meta["reason"] = (
-            f"Cần ít nhất {config.MIN_LABELS} nhãn có bài viết (không chứa ảnh) để huấn luyện, "
+            f"Cần ít nhất {config.MIN_LABELS} nhãn có bài viết để huấn luyện, "
             f"hiện có {len(data['trainable_labels'])}"
         )
     else:
@@ -157,6 +158,7 @@ def _train(db, data, fp):
             meta["stats"]["documents"] = len(documents)
             meta["stats"]["vocabularySize"] = len(model.vocabulary)
             meta["stats"]["perplexity"] = round(model.perplexity, 2)
+            meta["stats"]["gibbs"] = model.gibbs_info
             meta["topics"] = model.top_words(10)
 
     db.lda_models.replace_one({"_id": MODEL_ID}, meta, upsert=True)

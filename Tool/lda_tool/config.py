@@ -45,12 +45,23 @@ CRON_SECRET = os.getenv("CRON_SECRET", "")
 # ---- Siêu tham số LDA ----
 # Số chủ đề K: 0 = tự động bằng số nhãn đủ dữ liệu huấn luyện
 NUM_TOPICS = _int("LDA_NUM_TOPICS", 0)
-MAX_ITER = _int("LDA_MAX_ITER", 100)
 # alpha (doc-topic prior) và eta (topic-word prior); <= 0 nghĩa là dùng 1/K
 DOC_TOPIC_PRIOR = _float("LDA_ALPHA", 0)
 TOPIC_WORD_PRIOR = _float("LDA_ETA", 0.01)
 MAX_FEATURES = _int("LDA_MAX_FEATURES", 5000)
 RANDOM_STATE = _int("LDA_RANDOM_STATE", 42)
+
+# ---- Collapsed Gibbs Sampling ----
+# Huấn luyện: tổng số vòng lặp, số vòng bỏ đi ban đầu (burn-in) và khoảng cách
+# giữa 2 lần lấy mẫu (thinning) để ước lượng phi/theta
+GIBBS_ITER = _int("LDA_GIBBS_ITER", 500)
+GIBBS_BURN_IN = _int("LDA_GIBBS_BURN_IN", 200)
+GIBBS_THIN = _int("LDA_GIBBS_THIN", 10)
+# Suy luận cho bài mới (fold-in Gibbs với phi cố định)
+INFER_ITER = _int("LDA_INFER_ITER", 100)
+INFER_BURN_IN = _int("LDA_INFER_BURN_IN", 50)
+# Giới hạn thời gian huấn luyện (giây) để không vượt maxDuration 60s của Vercel
+TRAIN_TIME_BUDGET = _float("LDA_TRAIN_TIME_BUDGET", 40)
 
 # ---- Dữ liệu huấn luyện ----
 MIN_DOCS_PER_LABEL = _int("LDA_MIN_DOCS_PER_LABEL", 1)
@@ -63,4 +74,4 @@ USE_LABEL_TEXT = _bool("LDA_USE_LABEL_TEXT", True)
 EXCLUDE_IMAGE_POSTS = _bool("LDA_EXCLUDE_IMAGE_POSTS", False)
 
 # Đổi giá trị này khi thay đổi thuật toán/tiền xử lý để buộc huấn luyện lại
-ALGORITHM_VERSION = "lda-centroid-v2"
+ALGORITHM_VERSION = "lda-gibbs-centroid-v1"
