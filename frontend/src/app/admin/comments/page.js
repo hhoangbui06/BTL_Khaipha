@@ -5,9 +5,11 @@ import { adminAPI } from '@/lib/api';
 import Pagination from '@/components/Pagination';
 import { FiSearch, FiTrash2, FiMessageSquare, FiExternalLink } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import useConfirm from '@/hooks/useConfirm';
 import { format } from 'date-fns';
 
 export default function AdminCommentsPage() {
+  const [askConfirm, confirmElement] = useConfirm();
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -38,7 +40,12 @@ export default function AdminCommentsPage() {
   }, [fetchComments]);
 
   const handleDeleteComment = async (commentId) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa bình luận này?')) return;
+    if (!(await askConfirm({
+      title: 'Xóa bình luận?',
+      message: 'Bình luận này và các phản hồi của nó sẽ bị xóa. Bạn có chắc chắn muốn xóa?',
+      confirmText: 'Xóa',
+      danger: true
+    }))) return;
 
     try {
       const { data } = await adminAPI.deleteComment(commentId);
@@ -178,6 +185,8 @@ export default function AdminCommentsPage() {
           <p>Không có bình luận nào.</p>
         </div>
       )}
+
+      {confirmElement}
     </div>
   );
 }

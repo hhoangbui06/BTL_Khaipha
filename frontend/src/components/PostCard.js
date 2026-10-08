@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { postAPI } from '@/lib/api';
 import ShareModal from './ShareModal';
+import ConfirmDialog from './ConfirmDialog';
 import { 
   FiHeart, 
   FiMessageSquare, 
@@ -42,6 +43,7 @@ export default function PostCard({
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
   const menuRef = useRef(null);
@@ -104,24 +106,26 @@ export default function PostCard({
     setShareModalOpen(true);
   };
 
-  const handleDeleteFromMenu = async (e) => {
+  const openDeleteConfirm = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setMenuOpen(false);
+    setConfirmDeleteOpen(true);
+  };
 
-    // Trang cha tự xử lý xóa (vd: trang cá nhân cần tải lại tường)
-    if (onDelete) {
-      onDelete(post._id);
-      return;
-    }
-
-    if (!confirm(`Bạn có chắc chắn muốn xóa bài viết "${post.title}"?`)) return;
-
+  const handleConfirmDelete = async () => {
     setDeleting(true);
     try {
+      if (onDelete) {
+        // Trang cha tự xử lý xóa (vd: trang cá nhân cần tải lại tường)
+        await onDelete(post._id);
+        setConfirmDeleteOpen(false);
+        return;
+      }
       const { data } = await postAPI.delete(post._id);
       if (data.success) {
         toast.success('Đã xóa bài viết');
+        setConfirmDeleteOpen(false);
         setDeleted(true);
       }
     } catch (error) {
@@ -173,10 +177,9 @@ export default function PostCard({
                   type="button"
                   role="menuitem"
                   className="post-card-menu-item danger"
-                  onClick={handleDeleteFromMenu}
-                  disabled={deleting}
+                  onClick={openDeleteConfirm}
                 >
-                  <FiTrash2 /> {deleting ? 'Đang xóa...' : 'Xóa bài viết'}
+                  <FiTrash2 /> Xóa bài viết
                 </button>
               </div>
             )}
@@ -365,11 +368,7 @@ export default function PostCard({
                   {onDelete && (
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onDelete(post._id);
-                      }}
+                      onClick={openDeleteConfirm}
                       className="action-btn"
                       style={{ padding: '6px 8px', color: 'var(--error)' }}
                       title="Xóa bài viết"
@@ -383,6 +382,18 @@ export default function PostCard({
           )}
         </div>
       </div>
+
+      {/* Hộp thoại xác nhận xóa */}
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Xóa bài viết?"
+        message={`Bài viết "${post.title}" sẽ bị xóa và không còn hiển thị với mọi người. Bạn có chắc chắn muốn xóa?`}
+        confirmText="Xóa"
+        danger
+        loading={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
 
       {/* Share Modal */}
       <ShareModal

@@ -21,15 +21,20 @@ import {
   FiUser
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import useConfirm from '@/hooks/useConfirm';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { formatDistanceToNow, format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
 export default function PostDetailPage() {
+  const [askConfirm, confirmElement] = useConfirm();
   const { slug } = useParams();
   const router = useRouter();
   const { user } = useAuth();
 
   const [post, setPost] = useState(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deletingPost, setDeletingPost] = useState(false);
   const [loading, setLoading] = useState(true);
   const [comments, setComments] = useState([]);
   const [commentLoading, setCommentLoading] = useState(false);
@@ -162,7 +167,12 @@ export default function PostDetailPage() {
 
   // Delete comment
   const handleDeleteComment = async (commentId) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa bình luận này?')) return;
+    if (!(await askConfirm({
+      title: 'Xóa bình luận?',
+      message: 'Bình luận này sẽ bị xóa. Bạn có chắc chắn muốn xóa?',
+      confirmText: 'Xóa',
+      danger: true
+    }))) return;
 
     try {
       const { data } = await commentAPI.delete(commentId);
@@ -177,16 +187,18 @@ export default function PostDetailPage() {
 
   // Delete post
   const handleDeletePost = async () => {
-    if (!confirm('Bạn có chắc chắn muốn xóa bài viết này không?')) return;
-
+    setDeletingPost(true);
     try {
       const { data } = await postAPI.delete(post._id);
       if (data.success) {
         toast.success('Đã xóa bài viết thành công');
+        setConfirmDeleteOpen(false);
         router.push('/');
       }
     } catch (error) {
       toast.error('Không thể xóa bài viết');
+    } finally {
+      setDeletingPost(false);
     }
   };
 
@@ -364,7 +376,7 @@ export default function PostDetailPage() {
                   </Link>
                   <button
                     type="button"
-                    onClick={handleDeletePost}
+                    onClick={() => setConfirmDeleteOpen(true)}
                     className="btn btn-danger btn-sm"
                   >
                     <FiTrash2 /> Xóa
@@ -622,6 +634,19 @@ export default function PostDetailPage() {
         onClose={() => setShareModalOpen(false)}
         onShareSuccess={(newCount) => setShareCount(newCount)}
       />
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Xóa bài viết?"
+        message={`Bài viết "${post.title}" sẽ bị xóa và không còn hiển thị với mọi người. Bạn có chắc chắn muốn xóa?`}
+        confirmText="Xóa"
+        danger
+        loading={deletingPost}
+        onConfirm={handleDeletePost}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
+
+      {confirmElement}
     </div>
   );
 }

@@ -19,10 +19,12 @@ import {
   FiShield
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import useConfirm from '@/hooks/useConfirm';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
 export default function UserProfilePage() {
+  const [askConfirm, confirmElement] = useConfirm();
   const { id } = useParams();
   const router = useRouter();
   const { user: currentUser } = useAuth();
@@ -89,7 +91,12 @@ export default function UserProfilePage() {
 
   // Handle unshare
   const handleUnshare = async (postId) => {
-    if (!confirm('Bạn có muốn gỡ bài viết này khỏi trang cá nhân của mình?')) return;
+    if (!(await askConfirm({
+      title: 'Gỡ bài chia sẻ?',
+      message: 'Bài viết sẽ được gỡ khỏi trang cá nhân của bạn. Bài viết gốc không bị ảnh hưởng.',
+      confirmText: 'Gỡ',
+      danger: true
+    }))) return;
 
     try {
       const { data } = await postAPI.unshare(postId);
@@ -103,17 +110,12 @@ export default function UserProfilePage() {
   };
 
   // Handle delete own post
+  // PostCard đã hiển thị hộp thoại xác nhận trước khi gọi hàm này
   const handleDeletePost = async (postId) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa bài viết này không?')) return;
-
-    try {
-      const { data } = await postAPI.delete(postId);
-      if (data.success) {
-        toast.success('Đã xóa bài viết');
-        fetchWall();
-      }
-    } catch (error) {
-      toast.error('Không thể xóa bài viết');
+    const { data } = await postAPI.delete(postId);
+    if (data.success) {
+      toast.success('Đã xóa bài viết');
+      fetchWall();
     }
   };
 
@@ -304,6 +306,8 @@ export default function UserProfilePage() {
       </main>
 
       <Footer />
+
+      {confirmElement}
     </div>
   );
 }

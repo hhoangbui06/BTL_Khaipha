@@ -4,11 +4,13 @@ import { labelAPI, adminAPI } from '@/lib/api';
 import PostPreviewModal from '@/components/PostPreviewModal';
 import { FiPlus, FiTrash2, FiEdit, FiTag, FiX, FiCheck, FiFileText, FiChevronDown, FiChevronUp, FiEye } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import useConfirm from '@/hooks/useConfirm';
 import { format } from 'date-fns';
 
 const LABEL_POSTS_LIMIT = 100;
 
 export default function AdminLabelsPage() {
+  const [askConfirm, confirmElement] = useConfirm();
   const [labels, setLabels] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -142,7 +144,12 @@ export default function AdminLabelsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa nhãn này?')) return;
+    if (!(await askConfirm({
+      title: 'Xóa nhãn?',
+      message: 'Nhãn sẽ bị xóa khỏi hệ thống. Các bài viết đang dùng nhãn này sẽ được LDA Tool tự gán nhãn khác.',
+      confirmText: 'Xóa nhãn',
+      danger: true
+    }))) return;
 
     try {
       const { data } = await labelAPI.delete(id);
@@ -514,6 +521,8 @@ export default function AdminLabelsPage() {
       {previewPost && (
         <PostPreviewModal post={previewPost} onClose={closePreview} />
       )}
+
+      {confirmElement}
     </div>
   );
 }

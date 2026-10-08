@@ -1898,6 +1898,20 @@ a:hover {
   cursor: not-allowed;
 }
 
+.confirm-dialog {
+  max-width: 440px;
+}
+
+.confirm-dialog:focus {
+  outline: none;
+}
+
+.confirm-dialog-message {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
 /* ========================================
    ADMIN - LABEL POSTS & POST PREVIEW
 ======================================== */

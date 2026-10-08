@@ -18,9 +18,11 @@ import {
   FiSlash
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import useConfirm from '@/hooks/useConfirm';
 import { format } from 'date-fns';
 
 export default function AdminPostsPage() {
+  const [askConfirm, confirmElement] = useConfirm();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -127,8 +129,12 @@ export default function AdminPostsPage() {
   };
 
   const handleRemoveLabels = async (post) => {
-    if (!confirm(`Xóa nhãn của bài viết "${post.title}"?
-Tool sẽ không tự gán lại nhãn cho bài này cho tới khi bạn gán nhãn mới.`)) return;
+    if (!(await askConfirm({
+      title: 'Xóa nhãn của bài viết?',
+      message: `Nhãn của bài viết "${post.title}" sẽ bị xóa. LDA Tool sẽ không tự gán lại nhãn cho bài này cho tới khi bạn gán nhãn mới.`,
+      confirmText: 'Xóa nhãn',
+      danger: true
+    }))) return;
 
     try {
       const { data } = await adminAPI.removePostLabels(post._id);
@@ -166,7 +172,12 @@ Tool sẽ không tự gán lại nhãn cho bài này cho tới khi bạn gán nh
   };
 
   const handleDeletePost = async (postId) => {
-    if (!confirm('Bạn có chắc muốn xóa bài viết này vĩnh viễn khỏi danh sách hiển thị?')) return;
+    if (!(await askConfirm({
+      title: 'Xóa bài viết?',
+      message: 'Bài viết sẽ bị xóa và không còn hiển thị với mọi người. Bạn có chắc chắn muốn xóa?',
+      confirmText: 'Xóa',
+      danger: true
+    }))) return;
 
     try {
       const { data } = await adminAPI.deletePost(postId);
@@ -491,6 +502,8 @@ Tool sẽ không tự gán lại nhãn cho bài này cho tới khi bạn gán nh
           </div>
         </div>
       )}
+
+      {confirmElement}
     </div>
   );
 }

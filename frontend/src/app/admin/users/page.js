@@ -15,9 +15,11 @@ import {
   FiX
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import useConfirm from '@/hooks/useConfirm';
 import { format } from 'date-fns';
 
 export default function AdminUsersPage() {
+  const [askConfirm, confirmElement] = useConfirm();
   const { user: currentAdmin } = useAuth();
 
   const [users, setUsers] = useState([]);
@@ -95,7 +97,12 @@ export default function AdminUsersPage() {
       return;
     }
 
-    if (!confirm('Bạn có chắc chắn muốn xóa người dùng này?')) return;
+    if (!(await askConfirm({
+      title: 'Xóa người dùng?',
+      message: 'Tài khoản người dùng này sẽ bị xóa khỏi hệ thống. Bạn có chắc chắn muốn xóa?',
+      confirmText: 'Xóa',
+      danger: true
+    }))) return;
 
     try {
       const { data } = await adminAPI.deleteUser(userId);
@@ -336,6 +343,8 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      {confirmElement}
     </div>
   );
 }
