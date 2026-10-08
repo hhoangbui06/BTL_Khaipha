@@ -5,7 +5,8 @@ const Share = require('../models/share-model');
 const { uploadToCloudinary } = require('../middlewares/upload-middleware');
 const { autoLabelPosts, notifyDataChanged } = require('../helpers/lda-tool-helper');
 
-// Mỗi bài viết chỉ có đúng 1 nhãn: chuẩn hóa dữ liệu gửi lên thành mảng tối đa 1 phần tử
+// Mỗi bài viết có tối đa 2 nhãn: chuẩn hóa dữ liệu gửi lên (bỏ trùng, tối đa 2 phần tử)
+const MAX_LABELS_PER_POST = 2;
 const parseLabels = (labels) => {
   let list = [];
   if (typeof labels === 'string') {
@@ -18,7 +19,8 @@ const parseLabels = (labels) => {
     list = labels;
   }
   if (!Array.isArray(list)) list = [list];
-  return list.filter(id => mongoose.Types.ObjectId.isValid(id)).slice(0, 1);
+  const ids = list.map(String).filter(id => mongoose.Types.ObjectId.isValid(id));
+  return [...new Set(ids)].slice(0, MAX_LABELS_PER_POST);
 };
 
 // Upload thumbnail, trả về lỗi rõ ràng thay vì "Lỗi server"

@@ -61,6 +61,8 @@ const postSchema = new mongoose.Schema({
     default: false
   },
   autoLabelScore: Number,
+  // Tỷ lệ nội dung thuộc từng nhãn do Tool gán (cùng thứ tự với labels)
+  autoLabelShares: [Number],
   autoLabelModel: String,
   autoLabeledAt: Date,
   // Admin đã xóa nhãn của bài -> LDA Tool không tự gán lại cho tới khi admin gán nhãn mới

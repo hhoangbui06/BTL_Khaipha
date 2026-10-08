@@ -108,7 +108,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link href="/" className="navbar-logo">
           <FiBookOpen style={{ fontSize: 26 }} />
-          <span>VănBản<span style={{ color: '#a78bfa' }}>Blog</span></span>
+          <span style={{ color: '#a78bfa' }}>Blog</span>
         </Link>
 
         {/* Search bar with text suggestions */}

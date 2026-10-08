@@ -1,6 +1,6 @@
 # LDA Tool – Tự động gán nhãn bài viết
 
-Tool Python dùng **LDA (Latent Dirichlet Allocation)** để tự gán **đúng 1 nhãn** cho bài viết chưa có nhãn.
+Tool Python dùng **LDA (Latent Dirichlet Allocation)** để tự gán **1–2 nhãn** cho bài viết chưa có nhãn.
 Bài viết đã có nhãn (do người hoặc do Tool gán) không bao giờ bị gán lại.
 Tool đọc trực tiếp MongoDB của website, tự huấn luyện lại khi dữ liệu thay đổi và được deploy lên Vercel
 như một project riêng (Root Directory = `Tool`).
@@ -26,7 +26,7 @@ Tool/
 
 1. **Dữ liệu huấn luyện**: bài viết chưa xóa, có nhãn do người dùng/admin gán (`autoLabeled != true`).
    Tool **chỉ đọc chữ của tiêu đề + nội dung**; ảnh (`<img>`, ảnh markdown, `data:image`) và thumbnail bị bỏ qua.
-   Mỗi bài chỉ có 1 nhãn (bài cũ nhiều nhãn thì lấy nhãn đầu tiên). Nhãn chưa có bài viết bị bỏ qua.
+   Mỗi bài có tối đa 2 nhãn (bài được dùng cho centroid của cả 2 nhãn). Nhãn chưa có bài viết bị bỏ qua.
    Muốn loại hẳn bài có ảnh khỏi dữ liệu huấn luyện: đặt `LDA_EXCLUDE_IMAGE_POSTS=true`.
 2. **Tiền xử lý**: bỏ HTML → chuẩn hóa Unicode NFC, chữ thường → bỏ URL/email/số/ký tự đặc biệt →
    **tách từ tiếng Việt bằng `pyvi`** (`trí tuệ nhân tạo` → `trí_tuệ nhân_tạo`) → bỏ stopword.
@@ -42,8 +42,14 @@ Tool/
 4. **Ánh xạ chủ đề → nhãn**: lấy θ của từng bài từ quá trình lấy mẫu; *centroid* của nhãn L
    là trung bình θ các bài thuộc L.
 5. **Gán nhãn**: bài mới → suy luận θ_new bằng Gibbs *fold-in* (giữ φ cố định, lấy mẫu
-   `P(z_i = k) ∝ (n_dk + α) · φ_kw`, 100 vòng, bỏ 50 vòng đầu) → chọn nhãn có
-   `cosine(θ_new, centroid_L)` lớn nhất. Lưu `autoLabeled=true`, `autoLabelScore` vào bài viết.
+   `P(z_i = k) ∝ (n_dk + α) · φ_kw`, 100 vòng, bỏ 50 vòng đầu) → phân tích θ_new thành tỷ lệ nội dung
+   thuộc từng nhãn bằng NNLS (`θ_new ≈ Σ w_L · centroid_L`, `w_L ≥ 0`, chuẩn hóa tổng = 1):
+   - **Nhãn 1** (luôn gán): nhãn có tỷ lệ lớn nhất.
+   - **Nhãn 2** (tùy chọn): chỉ gán khi chiếm **≥ 30% nội dung** (`LDA_SECOND_LABEL_MIN_SHARE`) và centroid
+     của 2 nhãn không gần trùng nhau (cosine < 0.95, `LDA_SECOND_LABEL_MAX_CENTROID_SIM`).
+   - Không dùng ngưỡng cosine cho nhãn 2: bài 50/50 hai chủ đề chỉ có cosine ≈ 0.71 với mỗi centroid.
+   `autoLabelScore` = cosine của nhãn chính; `autoLabelShares` = tỷ lệ nội dung của các nhãn được gán.
+   Lưu `labels`, `autoLabeled=true`, `autoLabelScore`, `autoLabelShares` vào bài viết.
    Chỉ bài **chưa có nhãn** (hoặc chỉ còn nhãn đã bị xóa) mới được gán.
 
 Mô hình được lưu trong collection `lda_models` (mảng numpy dạng `.npy`), nên không phụ thuộc phiên bản pickle.

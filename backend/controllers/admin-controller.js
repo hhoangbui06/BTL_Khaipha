@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const User = require('../models/user-model');
 const Post = require('../models/post-model');
 const Comment = require('../models/comment-model');
@@ -270,31 +271,41 @@ module.exports.setPostLabels = async (req, res) => {
       });
     }
 
-    // Mỗi bài viết chỉ có đúng 1 nhãn: ưu tiên nhãn mới tạo, sau đó tới nhãn có sẵn
-    let labelId = null;
-    const newLabel = newLabels.find(item => (item.name || '').trim());
-    if (newLabel) {
-      const name = newLabel.name.trim();
+    // Mỗi bài viết có tối đa 2 nhãn: nhãn có sẵn được chọn trước, sau đó tới nhãn mới tạo
+    const MAX_LABELS_PER_POST = 2;
+    const ids = [];
+    const addId = (id) => {
+      const key = id.toString();
+      if (!ids.includes(key) && ids.length < MAX_LABELS_PER_POST) ids.push(key);
+    };
+
+    for (const id of labelIds) {
+      if (!mongoose.Types.ObjectId.isValid(id)) continue;
+      const label = await Label.findOne({ _id: id, deleted: false }).select('_id');
+      if (label) addId(label._id);
+    }
+
+    for (const item of newLabels) {
+      const name = (item.name || '').trim();
+      if (!name || ids.length >= MAX_LABELS_PER_POST) continue;
       let label = await Label.findOne({ name });
       if (!label) {
-        label = await Label.create({ name, color: newLabel.color || '#6366f1', description: newLabel.description || '' });
+        label = await Label.create({ name, color: item.color || '#6366f1', description: item.description || '' });
       } else if (label.deleted) {
         // Tên trùng với nhãn đã xóa mềm -> khôi phục lại nhãn đó
         label.deleted = false;
         label.deletedAt = undefined;
-        label.color = newLabel.color || label.color;
+        label.color = item.color || label.color;
         await label.save();
       }
-      labelId = label._id;
-    } else if (labelIds.length > 0) {
-      const label = await Label.findOne({ _id: labelIds[0], deleted: false }).select('_id');
-      labelId = label ? label._id : null;
+      addId(label._id);
     }
 
-    post.labels = labelId ? [labelId] : [];
+    post.labels = ids;
     post.autoLabeled = false; // admin đã xác nhận nhãn
-    post.autoLabelDisabled = !labelId; // admin bỏ trống nhãn -> Tool không tự gán lại
+    post.autoLabelDisabled = ids.length === 0; // admin bỏ trống nhãn -> Tool không tự gán lại
     post.autoLabelScore = undefined;
+    post.autoLabelShares = undefined;
     post.autoLabelModel = undefined;
     await post.save({ validateBeforeSave: false });
     notifyDataChanged();
@@ -329,6 +340,7 @@ module.exports.removePostLabels = async (req, res) => {
     post.autoLabeled = false;
     post.autoLabelDisabled = true;
     post.autoLabelScore = undefined;
+    post.autoLabelShares = undefined;
     post.autoLabelModel = undefined;
     post.autoLabeledAt = undefined;
     await post.save({ validateBeforeSave: false });

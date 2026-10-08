@@ -78,7 +78,7 @@ export default function AdminLdaPage() {
           </h1>
           <p className="page-subtitle">
             Tool học từ tiêu đề và nội dung chữ (bỏ qua ảnh) của các bài viết đã có nhãn, rồi tự gán
-            đúng 1 nhãn cho bài viết chưa có nhãn. Bài đã có nhãn được giữ nguyên.
+            1–2 nhãn cho bài viết chưa có nhãn (nhãn thứ 2 chỉ được gán khi chiếm ≥ 30% nội dung). Bài đã có nhãn được giữ nguyên.
             Tool tự huấn luyện lại khi bài viết hoặc nhãn thay đổi.
           </p>
         </div>
@@ -225,7 +225,17 @@ export default function AdminLdaPage() {
             {prediction.label ? (
               <>
                 <p>
-                  Nhãn dự đoán: <strong>{prediction.label.name}</strong> (độ tương đồng {prediction.label.score})
+                  Nhãn dự đoán:{' '}
+                  {(prediction.labels || [prediction.label]).map((l, i) => (
+                    <span key={l.id}>
+                      {i > 0 && ' + '}
+                      <strong>{l.name}</strong>
+                      {l.share !== undefined && ` (${Math.round(l.share * 100)}% nội dung)`}
+                    </span>
+                  ))}
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  Độ tương đồng cosine với từng nhãn:
                 </p>
                 <ul style={{ paddingLeft: 18, fontSize: 13, color: 'var(--text-muted)' }}>
                   {prediction.scores.map((s) => (

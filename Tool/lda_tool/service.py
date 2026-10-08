@@ -57,15 +57,19 @@ def collect_training_data(db):
         if config.EXCLUDE_IMAGE_POSTS and has_image(post.get("content", "")):
             excluded_image += 1
             continue
-        # Mỗi bài viết chỉ có 1 nhãn: lấy nhãn đầu tiên còn tồn tại
-        label_id = next((str(l) for l in post.get("labels", []) if str(l) in labels), None)
-        if label_id:
+        # Mỗi bài viết có tối đa 2 nhãn: lấy các nhãn còn tồn tại theo thứ tự đã gán
+        post_labels = []
+        for l in post.get("labels", []):
+            if str(l) in labels and str(l) not in post_labels:
+                post_labels.append(str(l))
+        post_labels = post_labels[: config.MAX_LABELS_PER_POST]
+        if post_labels:
             posts.append(
                 {
                     "id": str(post["_id"]),
                     "title": post.get("title", ""),
                     "content": post.get("content", ""),
-                    "labels": [label_id],
+                    "labels": post_labels,
                 }
             )
 
@@ -212,19 +216,21 @@ def label_posts(post_ids=None):
 
     results = []
     for post in db.posts.find(query, {"title": 1, "content": 1}):
-        prediction = model.predict(post_tokens(post.get("title"), post.get("content")))
+        prediction = model.predict_labels(post_tokens(post.get("title"), post.get("content")))
         if prediction is None:
             results.append({"postId": str(post["_id"]), "skipped": "Không có từ nào thuộc bộ từ vựng"})
             continue
 
-        label_id, score, _ = prediction
+        selected, cosine = prediction
+        score = cosine[selected[0][0]]  # độ tương đồng cosine của nhãn chính
         db.posts.update_one(
             {"_id": post["_id"]},
             {
                 "$set": {
-                    "labels": [ObjectId(label_id)],
+                    "labels": [ObjectId(label_id) for label_id, _ in selected],
                     "autoLabeled": True,
                     "autoLabelScore": score,
+                    "autoLabelShares": [share for _, share in selected],
                     "autoLabelModel": model_fp,
                     "autoLabeledAt": _now(),
                 }
@@ -234,9 +240,12 @@ def label_posts(post_ids=None):
             {
                 "postId": str(post["_id"]),
                 "title": post.get("title"),
-                "labelId": label_id,
-                "labelName": labels.get(label_id, {}).get("name"),
+                "labelId": selected[0][0],
+                "labelName": " + ".join(labels.get(l, {}).get("name", "?") for l, _ in selected),
                 "score": score,
+                "labels": [
+                    {"id": l, "name": labels.get(l, {}).get("name"), "share": s} for l, s in selected
+                ],
             }
         )
     return {"ready": True, "model": model_fp, "labeled": results}
@@ -259,14 +268,19 @@ def predict_text(title="", content=""):
     model, meta = ensure_model()
     if model is None:
         return {"ready": False, "reason": meta.get("reason")}
-    prediction = model.predict(post_tokens(title, content))
+    prediction = model.predict_labels(post_tokens(title, content))
     if prediction is None:
-        return {"ready": True, "label": None, "reason": "Không có từ nào thuộc bộ từ vựng"}
+        return {"ready": True, "label": None, "labels": [], "reason": "Không có từ nào thuộc bộ từ vựng"}
     labels = load_active_labels(get_db())
-    label_id, score, scores = prediction
+    selected, scores = prediction
+    chosen = [
+        {"id": l, "name": labels.get(l, {}).get("name"), "score": scores[l], "share": share}
+        for l, share in selected
+    ]
     return {
         "ready": True,
-        "label": {"id": label_id, "name": labels.get(label_id, {}).get("name"), "score": score},
+        "label": chosen[0],
+        "labels": chosen,
         "scores": sorted(
             ({"id": l, "name": labels.get(l, {}).get("name"), "score": s} for l, s in scores.items()),
             key=lambda x: -x["score"],
@@ -316,24 +330,30 @@ def evaluate(test_ratio=0.3, seed=42):
 
     documents, document_labels = _build_corpus({**data, "trainable_labels": train_labels}, train)
     model = LdaLabeler.train(documents, document_labels, train_labels)
-    correct, details = 0, []
+    correct, exact, details = 0, 0, []
     for post in test:
-        prediction = model.predict(post_tokens(post["title"], post["content"]))
-        predicted = prediction[0] if prediction else None
-        ok = predicted in post["labels"]
+        prediction = model.predict_labels(post_tokens(post["title"], post["content"]))
+        predicted = [l for l, _ in prediction[0]] if prediction else []
+        # Đúng (top-1): nhãn chính dự đoán nằm trong nhãn thật
+        ok = bool(predicted) and predicted[0] in post["labels"]
+        # Khớp hoàn toàn: tập nhãn dự đoán trùng tập nhãn thật
+        same = set(predicted) == set(post["labels"])
         correct += ok
+        exact += same
         details.append(
             {
                 "title": post["title"],
                 "true": [data["labels"][l]["name"] for l in post["labels"]],
-                "predicted": data["labels"].get(predicted, {}).get("name") if predicted else None,
+                "predicted": [data["labels"].get(l, {}).get("name") for l in predicted],
                 "correct": ok,
+                "exactMatch": same,
             }
         )
     return {
         "train": len(train),
         "test": len(test),
         "accuracy": round(correct / len(test), 4),
+        "exactMatch": round(exact / len(test), 4),
         "perplexity": round(model.perplexity, 2),
         "details": details,
     }

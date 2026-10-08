@@ -33,6 +33,7 @@ import io
 import time
 
 import numpy as np
+from scipy.optimize import nnls
 from sklearn.feature_extraction.text import CountVectorizer
 
 from . import config
@@ -288,15 +289,56 @@ class LdaLabeler:
         return theta / theta.sum()
 
     def predict(self, tokens):
-        """Trả về (label_id, score, {label_id: score}) hoặc None nếu không đủ từ."""
+        """Trả về (label_id, cosine, {label_id: cosine}) của nhãn chính, hoặc None nếu không đủ từ."""
+        result = self.predict_labels(tokens)
+        if result is None:
+            return None
+        selected, all_scores = result
+        label_id = selected[0][0]
+        return label_id, all_scores[label_id], all_scores
+
+    def label_shares(self, theta):
+        """Tỷ lệ nội dung của tài liệu thuộc từng nhãn.
+
+        Phân tích theta thành tổ hợp không âm của các centroid nhãn
+        (Non-negative Least Squares):  theta ≈ Σ_L w_L · centroid_L,  w_L >= 0
+        rồi chuẩn hóa w về tổng 1. Ví dụ bài viết nửa Lập trình nửa Trí tuệ nhân tạo
+        sẽ có tỷ lệ ≈ 0.5 / 0.5.
+        """
+        weights, _ = nnls(self.centroids.T, theta)
+        total = weights.sum()
+        if total <= 0:
+            return np.full(len(self.label_ids), 1.0 / len(self.label_ids))
+        return weights / total
+
+    def predict_labels(self, tokens):
+        """Chọn 1-2 nhãn cho tài liệu.
+
+        Trả về ([(label_id, share), ...], {label_id: cosine}) hoặc None nếu không đủ từ.
+        - Nhãn 1: nhãn chiếm tỷ lệ nội dung lớn nhất (luôn được gán).
+        - Nhãn 2: chỉ gán khi chiếm >= SECOND_LABEL_MIN_SHARE nội dung bài viết và
+          centroid của 2 nhãn không gần như trùng nhau (xem config.SECOND_LABEL_*).
+        """
         theta = self.infer_theta(tokens)
         if theta is None:
             return None
         theta_unit = theta / max(np.linalg.norm(theta), 1e-12)
-        scores = self._unit_centroids @ theta_unit
-        best = int(np.argmax(scores))
-        all_scores = {label_id: round(float(s), 4) for label_id, s in zip(self.label_ids, scores)}
-        return self.label_ids[best], round(float(scores[best]), 4), all_scores
+        cosine = self._unit_centroids @ theta_unit
+        all_scores = {label_id: round(float(s), 4) for label_id, s in zip(self.label_ids, cosine)}
+
+        shares = self.label_shares(theta)
+        order = np.argsort(shares)[::-1]
+        first = int(order[0])
+        selected = [(self.label_ids[first], round(float(shares[first]), 4))]
+        if config.MAX_LABELS_PER_POST >= 2 and len(order) > 1:
+            second = int(order[1])
+            centroid_sim = float(self._unit_centroids[first] @ self._unit_centroids[second])
+            if (
+                shares[second] >= config.SECOND_LABEL_MIN_SHARE
+                and centroid_sim < config.SECOND_LABEL_MAX_CENTROID_SIM
+            ):
+                selected.append((self.label_ids[second], round(float(shares[second]), 4)))
+        return selected, all_scores
 
     def top_words(self, n=10):
         result = []

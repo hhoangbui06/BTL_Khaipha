@@ -19,6 +19,8 @@ import {
 import toast from 'react-hot-toast';
 import { compressImage, MAX_UPLOAD_BYTES } from '@/lib/image';
 
+const MAX_LABELS_PER_POST = 2;
+
 export default function EditPostPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -66,7 +68,7 @@ export default function EditPostPage() {
           setThumbnailPreview(p.thumbnail || '');
           setPostSlug(p.slug || '');
           if (p.labels) {
-            setSelectedLabels(p.labels.slice(0, 1).map(l => typeof l === 'object' ? l._id : l));
+            setSelectedLabels(p.labels.slice(0, MAX_LABELS_PER_POST).map(l => typeof l === 'object' ? l._id : l));
           }
         }
       } catch (error) {
@@ -99,9 +101,15 @@ export default function EditPostPage() {
     setThumbnailPreview(URL.createObjectURL(file));
   };
 
-  // Mỗi bài viết chỉ có đúng 1 nhãn: chọn nhãn khác sẽ thay thế, bấm lại để bỏ chọn
+  // Mỗi bài viết có tối đa 2 nhãn: bấm để chọn / bỏ chọn
   const handleToggleLabel = (labelId) => {
-    setSelectedLabels(prev => (prev.includes(labelId) ? [] : [labelId]));
+    if (selectedLabels.includes(labelId)) {
+      setSelectedLabels(selectedLabels.filter(id => id !== labelId));
+    } else if (selectedLabels.length >= MAX_LABELS_PER_POST) {
+      toast.error(`Mỗi bài viết chỉ được chọn tối đa ${MAX_LABELS_PER_POST} nhãn`);
+    } else {
+      setSelectedLabels([...selectedLabels, labelId]);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -277,7 +285,7 @@ export default function EditPostPage() {
               {/* Labels */}
               <div className="form-group">
                 <label className="form-label">
-                  Chủ đề & Nhãn (Labels)
+                  Chủ đề & Nhãn (Labels) – tối đa 2 nhãn
                 </label>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {availableLabels.map((lbl) => {

@@ -21,6 +21,8 @@ import toast from 'react-hot-toast';
 import useConfirm from '@/hooks/useConfirm';
 import { format } from 'date-fns';
 
+const MAX_LABELS_PER_POST = 2;
+
 export default function AdminPostsPage() {
   const [askConfirm, confirmElement] = useConfirm();
   const [posts, setPosts] = useState([]);
@@ -79,15 +81,22 @@ export default function AdminPostsPage() {
 
   const openLabelModal = (post) => {
     setLabelPost(post);
-    setSelectedLabelIds((post.labels || []).slice(0, 1).map(l => (typeof l === 'object' ? l._id : l)));
+    setSelectedLabelIds((post.labels || []).slice(0, MAX_LABELS_PER_POST).map(l => (typeof l === 'object' ? l._id : l)));
     setNewLabels([]);
     setNewLabelName('');
   };
 
-  // Mỗi bài viết chỉ có đúng 1 nhãn: chọn nhãn khác sẽ thay thế, bấm lại để bỏ chọn
+  // Mỗi bài viết có tối đa 2 nhãn: bấm để chọn / bỏ chọn
+  const selectedCount = selectedLabelIds.length + newLabels.length;
+
   const toggleLabel = (id) => {
-    setNewLabels([]);
-    setSelectedLabelIds(prev => (prev.includes(id) ? [] : [id]));
+    if (selectedLabelIds.includes(id)) {
+      setSelectedLabelIds(selectedLabelIds.filter(x => x !== id));
+    } else if (selectedCount >= MAX_LABELS_PER_POST) {
+      toast.error(`Mỗi bài viết chỉ được gán tối đa ${MAX_LABELS_PER_POST} nhãn`);
+    } else {
+      setSelectedLabelIds([...selectedLabelIds, id]);
+    }
   };
 
   const addNewLabel = () => {
@@ -95,11 +104,14 @@ export default function AdminPostsPage() {
     if (!name) return;
     const existing = allLabels.find(l => l.name.toLowerCase() === name.toLowerCase());
     if (existing) {
-      setNewLabels([]);
-      setSelectedLabelIds([existing._id]);
+      if (!selectedLabelIds.includes(existing._id)) toggleLabel(existing._id);
+    } else if (newLabels.some(l => l.name.toLowerCase() === name.toLowerCase())) {
+      // đã thêm rồi
+    } else if (selectedCount >= MAX_LABELS_PER_POST) {
+      toast.error(`Mỗi bài viết chỉ được gán tối đa ${MAX_LABELS_PER_POST} nhãn`);
+      return;
     } else {
-      setSelectedLabelIds([]);
-      setNewLabels([{ name, color: newLabelColor }]);
+      setNewLabels([...newLabels, { name, color: newLabelColor }]);
     }
     setNewLabelName('');
   };
@@ -429,7 +441,7 @@ export default function AdminPostsPage() {
               <p style={{ fontWeight: 600, marginBottom: 16 }}>{labelPost.title}</p>
 
               <div className="form-group">
-                <label className="form-label">Chọn 1 nhãn có sẵn</label>
+                <label className="form-label">Chọn nhãn có sẵn (tối đa 2 nhãn, đã chọn {selectedCount}/2)</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {allLabels.map((lbl) => {
                     const active = selectedLabelIds.includes(lbl._id);
@@ -468,7 +480,7 @@ export default function AdminPostsPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Hoặc tạo nhãn mới (thay thế nhãn đang chọn)</label>
+                <label className="form-label">Tạo nhãn mới</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input
                     type="text"

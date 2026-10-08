@@ -63,6 +63,16 @@ INFER_BURN_IN = _int("LDA_INFER_BURN_IN", 50)
 # Giới hạn thời gian huấn luyện (giây) để không vượt maxDuration 60s của Vercel
 TRAIN_TIME_BUDGET = _float("LDA_TRAIN_TIME_BUDGET", 40)
 
+# ---- Gán nhãn: tối thiểu 1, tối đa 2 nhãn / bài ----
+MAX_LABELS_PER_POST = 2
+# theta của bài viết được phân tích thành tỷ lệ nội dung thuộc từng nhãn (NNLS trên
+# các centroid). Nhãn 1 = nhãn chiếm tỷ lệ lớn nhất. Nhãn 2 chỉ được gán khi:
+#   share_2 >= SECOND_LABEL_MIN_SHARE  (nhãn 2 chiếm ít nhất 30% nội dung)
+#   cosine(centroid_1, centroid_2) < SECOND_LABEL_MAX_CENTROID_SIM
+#   (2 centroid gần trùng nhau = mô hình chưa phân biệt được 2 nhãn -> không gán thêm)
+SECOND_LABEL_MIN_SHARE = _float("LDA_SECOND_LABEL_MIN_SHARE", 0.3)
+SECOND_LABEL_MAX_CENTROID_SIM = _float("LDA_SECOND_LABEL_MAX_CENTROID_SIM", 0.95)
+
 # ---- Dữ liệu huấn luyện ----
 MIN_DOCS_PER_LABEL = _int("LDA_MIN_DOCS_PER_LABEL", 1)
 MIN_LABELS = _int("LDA_MIN_LABELS", 2)
@@ -74,4 +84,4 @@ USE_LABEL_TEXT = _bool("LDA_USE_LABEL_TEXT", True)
 EXCLUDE_IMAGE_POSTS = _bool("LDA_EXCLUDE_IMAGE_POSTS", False)
 
 # Đổi giá trị này khi thay đổi thuật toán/tiền xử lý để buộc huấn luyện lại
-ALGORITHM_VERSION = "lda-gibbs-centroid-v1"
+ALGORITHM_VERSION = "lda-gibbs-centroid-v2"

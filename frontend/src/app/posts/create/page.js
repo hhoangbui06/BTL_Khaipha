@@ -19,6 +19,8 @@ import {
 import toast from 'react-hot-toast';
 import { compressImage, MAX_UPLOAD_BYTES } from '@/lib/image';
 
+const MAX_LABELS_PER_POST = 2;
+
 export default function CreatePostPage() {
   const router = useRouter();
 
@@ -69,9 +71,15 @@ export default function CreatePostPage() {
     setThumbnailPreview(URL.createObjectURL(file));
   };
 
-  // Mỗi bài viết chỉ có đúng 1 nhãn: chọn nhãn khác sẽ thay thế, bấm lại để bỏ chọn
+  // Mỗi bài viết có tối đa 2 nhãn: bấm để chọn / bỏ chọn
   const handleToggleLabel = (labelId) => {
-    setSelectedLabels(prev => (prev.includes(labelId) ? [] : [labelId]));
+    if (selectedLabels.includes(labelId)) {
+      setSelectedLabels(selectedLabels.filter(id => id !== labelId));
+    } else if (selectedLabels.length >= MAX_LABELS_PER_POST) {
+      toast.error(`Mỗi bài viết chỉ được chọn tối đa ${MAX_LABELS_PER_POST} nhãn`);
+    } else {
+      setSelectedLabels([...selectedLabels, labelId]);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -246,7 +254,7 @@ export default function CreatePostPage() {
                     Chủ đề & Nhãn (Labels)
                   </label>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-                    Chọn 1 chủ đề cho bài viết. Nếu bỏ trống, hệ thống sẽ tự động gán nhãn phù hợp
+                    Chọn tối đa 2 chủ đề cho bài viết. Nếu bỏ trống, hệ thống sẽ tự động gán nhãn phù hợp
                   </p>
                 </div>
 
