@@ -119,9 +119,8 @@ export default function EditPostPage() {
       if (excerpt.trim()) formData.append('excerpt', excerpt.trim());
       formData.append('status', status);
 
-      if (selectedLabels.length > 0) {
-        formData.append('labels', JSON.stringify(selectedLabels));
-      }
+      // Luôn gửi danh sách nhãn (kể cả rỗng) để việc bỏ chọn hết nhãn được lưu lại
+      formData.append('labels', JSON.stringify(selectedLabels));
 
       if (thumbnailFile) {
         formData.append('thumbnail', thumbnailFile);

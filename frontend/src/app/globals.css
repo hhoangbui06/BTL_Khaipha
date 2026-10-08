@@ -1820,3 +1820,54 @@ a:hover {
 }
 
 
+
+/* ========================================
+   ADMIN - LABEL POSTS & POST PREVIEW
+======================================== */
+
+.post-preview-modal {
+  max-width: 900px;
+}
+
+.post-preview-modal:focus {
+  outline: none;
+}
+
+.label-posts-panel {
+  padding: 8px 0;
+}
+
+.label-post-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-base);
+}
+
+.label-post-row:hover {
+  background: var(--bg-card-hover);
+}
+
+.label-post-row-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.label-post-row-view {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-base);
+}
+
+.label-post-row:hover .label-post-row-view,
+.label-post-row:focus-within .label-post-row-view {
+  opacity: 1;
+  pointer-events: auto;
+}

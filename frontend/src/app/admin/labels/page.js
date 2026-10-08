@@ -1,9 +1,12 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { labelAPI } from '@/lib/api';
-import { FiPlus, FiTrash2, FiEdit, FiTag, FiX, FiCheck } from 'react-icons/fi';
+import { useState, useEffect, useCallback, Fragment } from 'react';
+import { labelAPI, adminAPI } from '@/lib/api';
+import PostPreviewModal from '@/components/PostPreviewModal';
+import { FiPlus, FiTrash2, FiEdit, FiTag, FiX, FiCheck, FiFileText, FiChevronDown, FiChevronUp, FiEye } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+
+const LABEL_POSTS_LIMIT = 100;
 
 export default function AdminLabelsPage() {
   const [labels, setLabels] = useState([]);
@@ -47,6 +50,38 @@ export default function AdminLabelsPage() {
   useEffect(() => {
     fetchLabels();
   }, []);
+
+  // Danh sách bài viết của nhãn đang mở
+  const [expandedLabelId, setExpandedLabelId] = useState(null);
+  const [labelPosts, setLabelPosts] = useState([]);
+  const [labelPostsTotal, setLabelPostsTotal] = useState(0);
+  const [loadingLabelPosts, setLoadingLabelPosts] = useState(false);
+  const [previewPost, setPreviewPost] = useState(null);
+
+  const closePreview = useCallback(() => setPreviewPost(null), []);
+
+  const handleToggleLabelPosts = async (labelId) => {
+    if (expandedLabelId === labelId) {
+      setExpandedLabelId(null);
+      return;
+    }
+
+    setExpandedLabelId(labelId);
+    setLabelPosts([]);
+    setLabelPostsTotal(0);
+    setLoadingLabelPosts(true);
+    try {
+      const { data } = await adminAPI.getPosts({ label: labelId, limit: LABEL_POSTS_LIMIT });
+      if (data.success) {
+        setLabelPosts(data.data.posts);
+        setLabelPostsTotal(data.data.pagination.total);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể tải bài viết của nhãn');
+    } finally {
+      setLoadingLabelPosts(false);
+    }
+  };
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -156,12 +191,14 @@ export default function AdminLabelsPage() {
                 <th>Slug (Đường dẫn)</th>
                 <th>Mô tả</th>
                 <th>Ngày tạo</th>
+                <th>Bài viết</th>
                 <th style={{ textAlign: 'right' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {labels.map((lbl) => (
-                <tr key={lbl._id}>
+                <Fragment key={lbl._id}>
+                <tr>
                   <td>
                     <span
                       className="post-label"
@@ -188,6 +225,18 @@ export default function AdminLabelsPage() {
                   <td>
                     {format(new Date(lbl.createdAt), 'dd/MM/yyyy')}
                   </td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleLabelPosts(lbl._id)}
+                      className="btn btn-ghost btn-sm"
+                      style={{ padding: '6px 10px' }}
+                      aria-expanded={expandedLabelId === lbl._id}
+                      title="Xem các bài viết được gán nhãn này"
+                    >
+                      <FiFileText /> Bài viết {expandedLabelId === lbl._id ? <FiChevronUp /> : <FiChevronDown />}
+                    </button>
+                  </td>
                   <td style={{ textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: 6 }}>
                       <button
@@ -211,6 +260,56 @@ export default function AdminLabelsPage() {
                     </div>
                   </td>
                 </tr>
+
+                {expandedLabelId === lbl._id && (
+                  <tr>
+                    <td colSpan={7} style={{ background: 'var(--bg-input)' }}>
+                      <div className="label-posts-panel">
+                        {loadingLabelPosts ? (
+                          <div style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: 13 }}>
+                            Đang tải bài viết...
+                          </div>
+                        ) : labelPosts.length > 0 ? (
+                          <>
+                            <div style={{ padding: '0 14px 8px', color: 'var(--text-muted)', fontSize: 13 }}>
+                              {labelPostsTotal} bài viết được gán nhãn #{lbl.name}
+                              {labelPostsTotal > labelPosts.length && ` (hiển thị ${labelPosts.length} bài mới nhất)`}
+                            </div>
+                            {labelPosts.map((post) => (
+                              <div key={post._id} className="label-post-row">
+                                <span className="label-post-row-title" title={post.title}>
+                                  {post.title}
+                                </span>
+                                {post.autoLabeled && (
+                                  <span
+                                    className="badge badge-info"
+                                    style={{ fontSize: 10, padding: '2px 8px' }}
+                                    title="Nhãn do LDA Tool tự gán"
+                                  >
+                                    🤖 Tự động
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewPost(post)}
+                                  className="btn btn-secondary btn-sm label-post-row-view"
+                                  style={{ padding: '4px 10px' }}
+                                >
+                                  <FiEye /> Xem bài viết
+                                </button>
+                              </div>
+                            ))}
+                          </>
+                        ) : (
+                          <div style={{ padding: '8px 14px', color: 'var(--text-muted)', fontSize: 13 }}>
+                            Chưa có bài viết nào được gán nhãn này.
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -409,6 +508,11 @@ export default function AdminLabelsPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Post Preview Modal */}
+      {previewPost && (
+        <PostPreviewModal post={previewPost} onClose={closePreview} />
       )}
     </div>
   );

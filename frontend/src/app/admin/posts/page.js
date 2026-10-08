@@ -105,7 +105,11 @@ export default function AdminPostsPage() {
         newLabels
       });
       if (data.success) {
-        toast.success('Đã gán nhãn cho bài viết');
+        toast.success(
+          selectedLabelIds.length === 0 && newLabels.length === 0
+            ? 'Đã bỏ toàn bộ nhãn của bài viết'
+            : 'Đã gán nhãn cho bài viết'
+        );
         setPosts(prev => prev.map(p => p._id === labelPost._id ? { ...p, ...data.data } : p));
         setLabelPost(null);
         if (newLabels.length > 0) fetchLabels();
