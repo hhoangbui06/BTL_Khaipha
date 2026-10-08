@@ -21,7 +21,25 @@ import toast from 'react-hot-toast';
 import { formatDistanceToNow, format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
-export default function PostCard({ 
+const DEFAULT_LABEL_COLOR = '#6366f1';
+
+// Chuẩn hóa màu hex (#abc hoặc #aabbcc); màu không hợp lệ -> màu mặc định
+const normalizeHex = (color) => {
+  const hex = (color || '').trim();
+  if (/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+  if (/^#[0-9a-f]{3}$/i.test(hex)) return '#' + hex.slice(1).split('').map(c => c + c).join('');
+  return DEFAULT_LABEL_COLOR;
+};
+
+// Chọn màu chữ trắng/đen tương phản với màu nền (theo độ sáng tương đối)
+const getContrastText = (hex) => {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.4 ? '#0f172a' : '#ffffff';
+};
+
+export default function PostCard({
   post, 
   isShared = false, 
   shareNote = '', 
@@ -244,11 +262,22 @@ export default function PostCard({
           <div className="post-card-thumb-overlay" />
 
           {/* Floating category / label badge */}
-          {post.labels && post.labels.length > 0 && (
-            <div className="post-card-floating-badge">
-              <span>{typeof post.labels[0] === 'object' ? post.labels[0].name : post.labels[0]}</span>
-            </div>
-          )}
+          {post.labels && post.labels.length > 0 && (() => {
+            const label = typeof post.labels[0] === 'object' ? post.labels[0] : { name: post.labels[0] };
+            const color = normalizeHex(label.color);
+            return (
+              <div
+                className="post-card-floating-badge"
+                style={{
+                  background: `${color}e6`,
+                  borderColor: `${color}`,
+                  color: getContrastText(color)
+                }}
+              >
+                <span>{label.name}</span>
+              </div>
+            );
+          })()}
 
           {/* Overlaid Title */}
           <div className="post-card-thumb-content">
