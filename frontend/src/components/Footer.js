@@ -24,7 +24,7 @@ export default function Footer() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <FiBookOpen style={{ fontSize: 24, color: 'var(--accent-primary)' }} />
             <span style={{ fontSize: 20, fontWeight: 800, background: 'var(--accent-gradient)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              VănBảnBlog
+              Blog
             </span>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6 }}>
@@ -73,7 +73,7 @@ export default function Footer() {
         color: 'var(--text-muted)'
       }}>
         <div>
-          © {new Date().getFullYear()} VănBảnBlog. Xây dựng với MongoDB, Express, Next.js & Node.js.
+          © {new Date().getFullYear()} Blog. Xây dựng với MongoDB, Express, Next.js & Node.js.
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           Thiết kế với <FiHeart style={{ color: 'var(--like-color)', fill: 'var(--like-color)' }} /> bởi Deepmind & Antigravity

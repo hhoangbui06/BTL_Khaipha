@@ -3,7 +3,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import CustomToaster from '@/components/CustomToaster';
 
 export const metadata = {
-  title: 'VănBảnBlog - Nền tảng viết blog & chia sẻ tri thức',
+  title: 'Blog - Nền tảng viết blog & chia sẻ tri thức',
   description: 'Trang web chia sẻ bài viết, kiến thức công nghệ, lập trình và cuộc sống với hệ thống tương tác và phân quyền đa tầng.',
 };
 

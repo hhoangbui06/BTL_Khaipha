@@ -69,9 +69,9 @@ export default function AdminLayout({ children }) {
     <div className="admin-layout">
       {/* Sidebar */}
       <aside className="admin-sidebar">
-        <Link href="/" className="admin-sidebar-logo">
+        <Link href="/admin" className="admin-sidebar-logo">
           <FiBookOpen style={{ fontSize: 22 }} />
-          <span>VănBản<span style={{ color: '#a78bfa' }}>Admin</span></span>
+          <span style={{ color: '#a78bfa' }}>Admin</span>
         </Link>
 
         {/* Current Admin Tag */}
