@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { adminAPI, labelAPI } from '@/lib/api';
 import Pagination from '@/components/Pagination';
+import PostPreviewModal from '@/components/PostPreviewModal';
 import {
   FiSearch,
   FiTrash2,
@@ -25,6 +26,8 @@ const MAX_LABELS_PER_POST = 2;
 
 export default function AdminPostsPage() {
   const [askConfirm, confirmElement] = useConfirm();
+  const [previewPost, setPreviewPost] = useState(null);
+  const closePreview = useCallback(() => setPreviewPost(null), []);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -382,14 +385,15 @@ export default function AdminPostsPage() {
                   <td>{format(new Date(post.createdAt), 'dd/MM/yyyy')}</td>
                   <td style={{ textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: 6 }}>
-                      <Link
-                        href={`/posts/${post.slug}`}
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPost(post)}
                         className="btn btn-secondary btn-sm"
                         style={{ padding: '6px 8px' }}
                         title="Xem bài viết"
                       >
                         <FiEye />
-                      </Link>
+                      </button>
                       <Link
                         href={`/posts/edit/${post._id}`}
                         className="btn btn-secondary btn-sm"
@@ -516,6 +520,11 @@ export default function AdminPostsPage() {
       )}
 
       {confirmElement}
+
+      {/* Post Preview Modal */}
+      {previewPost && (
+        <PostPreviewModal post={previewPost} onClose={closePreview} />
+      )}
     </div>
   );
 }
