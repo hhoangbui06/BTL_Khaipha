@@ -1916,6 +1916,25 @@ a:hover {
    ADMIN - LABEL POSTS & POST PREVIEW
 ======================================== */
 
+.admin-post-title-btn {
+  display: block;
+  margin-bottom: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-post-title-btn:hover,
+.admin-post-title-btn:focus-visible {
+  color: var(--text-accent);
+  text-decoration: underline;
+}
+
 .post-preview-modal {
   max-width: 900px;
 }

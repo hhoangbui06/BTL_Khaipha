@@ -301,12 +301,14 @@ export default function AdminPostsPage() {
                     )}
                   </td>
                   <td>
-                    <Link
-                      href={`/posts/${post.slug}`}
-                      style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}
+                    <button
+                      type="button"
+                      onClick={() => setPreviewPost(post)}
+                      className="admin-post-title-btn"
+                      title="Xem bài viết"
                     >
                       {post.title}
-                    </Link>
+                    </button>
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       Tác giả: {post.author?.fullName || 'Ẩn danh'} ({post.author?.email})
                     </span>
