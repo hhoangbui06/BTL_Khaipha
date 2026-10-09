@@ -90,7 +90,7 @@ export default function AdminLdaPage() {
           <p className="page-subtitle">
             Tool học từ tiêu đề và nội dung chữ (bỏ qua ảnh) của các bài viết đã có nhãn, rồi tự gán
             1–2 nhãn cho bài viết chưa có nhãn. Nhãn thứ 2 không bắt buộc: chỉ được gán khi bài thật sự thuộc 2 chủ đề
-            (nhãn 2 chiếm ≥ 30% và 2 nhãn chiếm ≥ 80% nội dung). Bài đã có nhãn được giữ nguyên.
+            (nhãn 2 chiếm ≥ 30% và 2 nhãn chiếm ≥ 60% nội dung). Bài đã có nhãn được giữ nguyên.
             Tool tự huấn luyện lại khi bài viết hoặc nhãn thay đổi.
           </p>
         </div>

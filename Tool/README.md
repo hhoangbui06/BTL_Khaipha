@@ -50,10 +50,12 @@ Tool/
    - **Nhãn 1** (luôn gán): nhãn có tỷ lệ lớn nhất.
    - **Nhãn 2** (không bắt buộc): chỉ gán khi thỏa **tất cả**:
      - nhãn 2 chiếm **≥ 30% nội dung** (`LDA_SECOND_LABEL_MIN_SHARE`);
-     - 2 nhãn đầu chiếm **≥ 80% nội dung** (`LDA_SECOND_LABEL_MIN_COVERAGE`) – nếu nội dung rải đều
+     - 2 nhãn đầu chiếm **≥ 60% nội dung** (`LDA_SECOND_LABEL_MIN_COVERAGE`) – nếu nội dung rải đều
        nhiều nhãn thì mô hình đang không chắc chắn → chỉ gán 1 nhãn;
-     - centroid của 2 nhãn không quá giống nhau (cosine < 0.9, `LDA_SECOND_LABEL_MAX_CENTROID_SIM`);
-     - nhãn 2 có **≥ 3 bài huấn luyện** (`LDA_SECOND_LABEL_MIN_DOCS`).
+     - centroid của 2 nhãn không gần như trùng nhau (cosine < 0.97, `LDA_SECOND_LABEL_MAX_CENTROID_SIM`);
+     - nhãn 2 có **≥ 2 bài huấn luyện** (`LDA_SECOND_LABEL_MIN_DOCS`).
+   - Bộ ngưỡng chọn bằng kiểm định chéo leave-one-out trên 21 bài do người gán (6 bài có 2 nhãn):
+     micro-F1 **0.607** (chỉ gán 1 nhãn: 0.542; bộ ngưỡng cũ 0.3/0.8/0.9/3: 0.510).
    - Nút **Gán lại bài tự động** (trang admin LDA) gán lại các bài do Tool gán theo ngưỡng hiện tại,
      không đụng tới nhãn do người gán.
    - Không dùng ngưỡng cosine cho nhãn 2: bài 50/50 hai chủ đề chỉ có cosine ≈ 0.71 với mỗi centroid.

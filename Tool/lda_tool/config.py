@@ -69,15 +69,17 @@ MAX_LABELS_PER_POST = 2
 # các centroid). Nhãn 1 = nhãn chiếm tỷ lệ lớn nhất (luôn gán). Một bài KHÔNG nhất
 # thiết có 2 nhãn: nhãn 2 chỉ được gán khi thỏa TẤT CẢ các điều kiện:
 #   share_2 >= SECOND_LABEL_MIN_SHARE            nhãn 2 chiếm >= 30% nội dung
-#   share_1 + share_2 >= SECOND_LABEL_MIN_COVERAGE  2 nhãn đầu chiếm >= 80% nội dung
+#   share_1 + share_2 >= SECOND_LABEL_MIN_COVERAGE  2 nhãn đầu chiếm >= 60% nội dung
 #       (nội dung rải đều nhiều nhãn = mô hình không chắc chắn -> chỉ gán 1 nhãn)
 #   cosine(centroid_1, centroid_2) < SECOND_LABEL_MAX_CENTROID_SIM
 #       (2 centroid quá giống nhau = mô hình chưa phân biệt được 2 nhãn)
 #   nhãn 2 có >= SECOND_LABEL_MIN_DOCS bài huấn luyện (centroid ít dữ liệu không tin cậy)
+# Bộ ngưỡng được chọn bằng kiểm định chéo leave-one-out trên 21 bài do người gán nhãn
+# (6 bài có 2 nhãn): micro-F1 0.607, so với 0.542 khi chỉ gán 1 nhãn.
 SECOND_LABEL_MIN_SHARE = _float("LDA_SECOND_LABEL_MIN_SHARE", 0.3)
-SECOND_LABEL_MIN_COVERAGE = _float("LDA_SECOND_LABEL_MIN_COVERAGE", 0.8)
-SECOND_LABEL_MAX_CENTROID_SIM = _float("LDA_SECOND_LABEL_MAX_CENTROID_SIM", 0.9)
-SECOND_LABEL_MIN_DOCS = _int("LDA_SECOND_LABEL_MIN_DOCS", 3)
+SECOND_LABEL_MIN_COVERAGE = _float("LDA_SECOND_LABEL_MIN_COVERAGE", 0.6)
+SECOND_LABEL_MAX_CENTROID_SIM = _float("LDA_SECOND_LABEL_MAX_CENTROID_SIM", 0.97)
+SECOND_LABEL_MIN_DOCS = _int("LDA_SECOND_LABEL_MIN_DOCS", 2)
 
 # ---- Dữ liệu huấn luyện ----
 # Dùng cả bài do Tool tự gán nhãn (autoLabeled = true) để huấn luyện.
