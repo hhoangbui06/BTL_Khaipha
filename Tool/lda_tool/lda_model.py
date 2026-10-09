@@ -162,13 +162,17 @@ def gibbs_train(docs, vocab_size, n_topics, alpha, eta, n_iter, burn_in, thin, s
 
 
 class LdaLabeler:
-    def __init__(self, vocabulary, topic_word, doc_topic_prior, label_ids, centroids):
+    def __init__(self, vocabulary, topic_word, doc_topic_prior, label_ids, centroids, label_train_counts=None):
         self.vocabulary = list(vocabulary)
         self.word_index = {w: i for i, w in enumerate(self.vocabulary)}
         self.topic_word = np.asarray(topic_word, dtype=np.float64)  # phi (K x V)
         self.doc_topic_prior = float(doc_topic_prior)
         self.label_ids = list(label_ids)
         self.centroids = np.asarray(centroids, dtype=np.float64)  # (L x K)
+        # Số bài viết huấn luyện của từng nhãn (cùng thứ tự label_ids)
+        self.label_train_counts = (
+            list(label_train_counts) if label_train_counts is not None else [0] * len(self.label_ids)
+        )
         norms = np.linalg.norm(self.centroids, axis=1, keepdims=True)
         self._unit_centroids = self.centroids / np.maximum(norms, 1e-12)
 
@@ -178,8 +182,12 @@ class LdaLabeler:
 
     # ------------------------------------------------------------------ train
     @classmethod
-    def train(cls, documents, document_labels, label_ids, num_topics=None):
-        """documents: list[list[str]]; document_labels: list[list[label_id]]."""
+    def train(cls, documents, document_labels, label_ids, num_topics=None, label_train_counts=None):
+        """documents: list[list[str]]; document_labels: list[list[label_id]].
+
+        label_train_counts: {label_id: số bài viết huấn luyện} (không tính tài liệu mồi);
+        dùng để chỉ cho nhãn đủ dữ liệu được làm nhãn thứ 2.
+        """
         n_topics = num_topics or config.NUM_TOPICS or len(label_ids)
         n_topics = max(int(n_topics), 2)
         alpha = config.DOC_TOPIC_PRIOR if config.DOC_TOPIC_PRIOR > 0 else 1.0 / n_topics
@@ -228,7 +236,12 @@ class LdaLabeler:
                     totals[position[label_id]] += 1
         centroids = sums / np.maximum(totals, 1)[:, None]
 
-        model = cls(vocabulary, phi, alpha, label_ids, centroids)
+        if label_train_counts is None:
+            counts = [int(t) for t in totals]
+        else:
+            counts = [int(label_train_counts.get(label_id, 0)) for label_id in label_ids]
+
+        model = cls(vocabulary, phi, alpha, label_ids, centroids, counts)
         model.gibbs_info = info
         model.perplexity = model._perplexity(docs, theta)
         return model
@@ -312,12 +325,16 @@ class LdaLabeler:
         return weights / total
 
     def predict_labels(self, tokens):
-        """Chọn 1-2 nhãn cho tài liệu.
+        """Chọn 1-2 nhãn cho tài liệu (KHÔNG bắt buộc phải có nhãn thứ 2).
 
         Trả về ([(label_id, share), ...], {label_id: cosine}) hoặc None nếu không đủ từ.
         - Nhãn 1: nhãn chiếm tỷ lệ nội dung lớn nhất (luôn được gán).
-        - Nhãn 2: chỉ gán khi chiếm >= SECOND_LABEL_MIN_SHARE nội dung bài viết và
-          centroid của 2 nhãn không gần như trùng nhau (xem config.SECOND_LABEL_*).
+        - Nhãn 2: chỉ gán khi thỏa TẤT CẢ (xem config.SECOND_LABEL_*):
+            share_2 >= SECOND_LABEL_MIN_SHARE          nhãn 2 chiếm đủ nhiều nội dung
+            share_1 + share_2 >= SECOND_LABEL_MIN_COVERAGE  bài gần như chỉ thuộc 2 nhãn này
+                (nội dung rải đều nhiều nhãn = mô hình không chắc chắn -> chỉ 1 nhãn)
+            cosine(centroid_1, centroid_2) < SECOND_LABEL_MAX_CENTROID_SIM
+            nhãn 2 có >= SECOND_LABEL_MIN_DOCS bài huấn luyện (centroid đáng tin cậy)
         """
         theta = self.infer_theta(tokens)
         if theta is None:
@@ -335,7 +352,9 @@ class LdaLabeler:
             centroid_sim = float(self._unit_centroids[first] @ self._unit_centroids[second])
             if (
                 shares[second] >= config.SECOND_LABEL_MIN_SHARE
+                and shares[first] + shares[second] >= config.SECOND_LABEL_MIN_COVERAGE
                 and centroid_sim < config.SECOND_LABEL_MAX_CENTROID_SIM
+                and self.label_train_counts[second] >= config.SECOND_LABEL_MIN_DOCS
             ):
                 selected.append((self.label_ids[second], round(float(shares[second]), 4)))
         return selected, all_scores
@@ -357,6 +376,7 @@ class LdaLabeler:
             "centroids": _to_bytes(self.centroids),
             "docTopicPrior": self.doc_topic_prior,
             "labelIds": self.label_ids,
+            "labelTrainCounts": self.label_train_counts,
             "numTopics": self.num_topics,
         }
 
@@ -368,4 +388,5 @@ class LdaLabeler:
             doc_topic_prior=doc["docTopicPrior"],
             label_ids=doc["labelIds"],
             centroids=_from_bytes(doc["centroids"]),
+            label_train_counts=doc.get("labelTrainCounts"),
         )

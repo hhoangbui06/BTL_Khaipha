@@ -105,7 +105,11 @@ def predict():
 
 @app.route("/api/sync", methods=["GET", "POST"])
 def sync():
-    return jsonify(success=True, data=service.sync(force_train=bool(_body().get("force"))))
+    body = _body()
+    return jsonify(
+        success=True,
+        data=service.sync(force_train=bool(body.get("force")), relabel_auto=bool(body.get("relabelAuto"))),
+    )
 
 
 if __name__ == "__main__":

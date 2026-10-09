@@ -374,7 +374,10 @@ module.exports.getLdaStatus = async (req, res) => {
 // LDA Tool: đồng bộ (huấn luyện lại nếu cần + gán nhãn bài còn thiếu)
 module.exports.syncLda = async (req, res) => {
   try {
-    const { data } = await callTool('POST', '/api/sync', { force: !!req.body.force });
+    const { data } = await callTool('POST', '/api/sync', {
+      force: !!req.body.force,
+      relabelAuto: !!req.body.relabelAuto
+    });
     res.json({ success: true, data });
   } catch (error) {
     res.status(502).json({ success: false, message: `LDA Tool lỗi: ${error.message}` });

@@ -138,7 +138,7 @@ export const adminAPI = {
   setPostLabels: (id, data) => api.put(`/admin/posts/${id}/labels`, data),
   removePostLabels: (id) => api.delete(`/admin/posts/${id}/labels`),
   getLdaStatus: () => api.get('/admin/lda/status'),
-  syncLda: (force = false) => api.post('/admin/lda/sync', { force }),
+  syncLda: (force = false, relabelAuto = false) => api.post('/admin/lda/sync', { force, relabelAuto }),
   predictLda: (data) => api.post('/admin/lda/predict', data),
   deletePost: (id) => api.delete(`/admin/posts/${id}`),
   getComments: (params) => api.get('/admin/comments', { params }),

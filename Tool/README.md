@@ -45,8 +45,14 @@ Tool/
    `P(z_i = k) ∝ (n_dk + α) · φ_kw`, 100 vòng, bỏ 50 vòng đầu) → phân tích θ_new thành tỷ lệ nội dung
    thuộc từng nhãn bằng NNLS (`θ_new ≈ Σ w_L · centroid_L`, `w_L ≥ 0`, chuẩn hóa tổng = 1):
    - **Nhãn 1** (luôn gán): nhãn có tỷ lệ lớn nhất.
-   - **Nhãn 2** (tùy chọn): chỉ gán khi chiếm **≥ 20% nội dung** (`LDA_SECOND_LABEL_MIN_SHARE`) và centroid
-     của 2 nhãn không gần trùng nhau (cosine < 0.9, `LDA_SECOND_LABEL_MAX_CENTROID_SIM`).
+   - **Nhãn 2** (không bắt buộc): chỉ gán khi thỏa **tất cả**:
+     - nhãn 2 chiếm **≥ 30% nội dung** (`LDA_SECOND_LABEL_MIN_SHARE`);
+     - 2 nhãn đầu chiếm **≥ 80% nội dung** (`LDA_SECOND_LABEL_MIN_COVERAGE`) – nếu nội dung rải đều
+       nhiều nhãn thì mô hình đang không chắc chắn → chỉ gán 1 nhãn;
+     - centroid của 2 nhãn không quá giống nhau (cosine < 0.9, `LDA_SECOND_LABEL_MAX_CENTROID_SIM`);
+     - nhãn 2 có **≥ 3 bài huấn luyện** (`LDA_SECOND_LABEL_MIN_DOCS`).
+   - Nút **Gán lại bài tự động** (trang admin LDA) gán lại các bài do Tool gán theo ngưỡng hiện tại,
+     không đụng tới nhãn do người gán.
    - Không dùng ngưỡng cosine cho nhãn 2: bài 50/50 hai chủ đề chỉ có cosine ≈ 0.71 với mỗi centroid.
    `autoLabelScore` = cosine của nhãn chính; `autoLabelShares` = tỷ lệ nội dung của các nhãn được gán.
    Lưu `labels`, `autoLabeled=true`, `autoLabelScore`, `autoLabelShares` vào bài viết.

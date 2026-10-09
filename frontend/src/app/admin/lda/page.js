@@ -1,11 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { adminAPI } from '@/lib/api';
-import { FiRefreshCw, FiCpu, FiPlay, FiZap } from 'react-icons/fi';
+import { FiRefreshCw, FiCpu, FiPlay, FiZap, FiRotateCcw } from 'react-icons/fi';
 import toast from 'react-hot-toast';
+import useConfirm from '@/hooks/useConfirm';
 import { format } from 'date-fns';
 
 export default function AdminLdaPage() {
+  const [askConfirm, confirmElement] = useConfirm();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -32,10 +34,10 @@ export default function AdminLdaPage() {
     fetchStatus();
   }, []);
 
-  const handleSync = async (force) => {
+  const handleSync = async (force, relabelAuto = false) => {
     setSyncing(true);
     try {
-      const { data } = await adminAPI.syncLda(force);
+      const { data } = await adminAPI.syncLda(force, relabelAuto);
       if (data.success) {
         setLastSync(data.data);
         if (data.data.ready) {
@@ -50,6 +52,15 @@ export default function AdminLdaPage() {
     } finally {
       setSyncing(false);
     }
+  };
+
+  const handleRelabelAuto = async () => {
+    const ok = await askConfirm({
+      title: 'Gán lại các bài tự động?',
+      message: 'Tất cả bài viết do Tool tự gán nhãn (🤖) sẽ được gán lại theo mô hình và ngưỡng hiện tại. Nhãn do người dùng/admin gán không bị thay đổi.',
+      confirmText: 'Gán lại'
+    });
+    if (ok) handleSync(false, true);
   };
 
   const handlePredict = async (e) => {
@@ -78,7 +89,8 @@ export default function AdminLdaPage() {
           </h1>
           <p className="page-subtitle">
             Tool học từ tiêu đề và nội dung chữ (bỏ qua ảnh) của các bài viết đã có nhãn, rồi tự gán
-            1–2 nhãn cho bài viết chưa có nhãn (nhãn thứ 2 chỉ được gán khi chiếm ≥ 20% nội dung). Bài đã có nhãn được giữ nguyên.
+            1–2 nhãn cho bài viết chưa có nhãn. Nhãn thứ 2 không bắt buộc: chỉ được gán khi bài thật sự thuộc 2 chủ đề
+            (nhãn 2 chiếm ≥ 30% và 2 nhãn chiếm ≥ 80% nội dung). Bài đã có nhãn được giữ nguyên.
             Tool tự huấn luyện lại khi bài viết hoặc nhãn thay đổi.
           </p>
         </div>
@@ -88,6 +100,9 @@ export default function AdminLdaPage() {
           </button>
           <button type="button" className="btn btn-secondary" onClick={() => handleSync(true)} disabled={syncing}>
             <FiCpu /> Huấn luyện lại
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={handleRelabelAuto} disabled={syncing}>
+            <FiRotateCcw /> Gán lại bài tự động
           </button>
           <button type="button" className="btn btn-primary" onClick={() => handleSync(false)} disabled={syncing}>
             <FiPlay /> {syncing ? 'Đang chạy...' : 'Đồng bộ ngay'}
@@ -249,6 +264,8 @@ export default function AdminLdaPage() {
           </div>
         )}
       </div>
+
+      {confirmElement}
     </div>
   );
 }

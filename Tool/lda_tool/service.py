@@ -156,7 +156,9 @@ def _train(db, data, fp):
         if len(documents) < 2:
             meta["reason"] = "Không đủ văn bản sau tiền xử lý để huấn luyện"
         else:
-            model = LdaLabeler.train(documents, document_labels, data["trainable_labels"])
+            model = LdaLabeler.train(
+                documents, document_labels, data["trainable_labels"], label_train_counts=data["label_counts"]
+            )
             meta.update(model.to_document())
             meta["ready"] = True
             meta["stats"]["documents"] = len(documents)
@@ -191,12 +193,13 @@ def ensure_model(force=False):
 
 
 # ----------------------------------------------------------------- labeling
-def label_posts(post_ids=None):
-    """Gán đúng 1 nhãn cho các bài CHƯA có nhãn (hoặc chỉ còn nhãn đã bị xóa).
+def label_posts(post_ids=None, relabel_auto=False):
+    """Gán 1-2 nhãn cho các bài CHƯA có nhãn (hoặc chỉ còn nhãn đã bị xóa).
 
     post_ids: chỉ xử lý các bài này (dùng khi backend vừa tạo/sửa bài);
     None: quét toàn bộ cơ sở dữ liệu.
-    Bài đã có nhãn (do người hay do Tool gán) luôn được giữ nguyên.
+    relabel_auto: True -> gán lại cả các bài do Tool đã gán trước đó (admin chủ động
+    yêu cầu, vd sau khi đổi ngưỡng). Nhãn do con người gán không bao giờ bị thay đổi.
     """
     db = get_db()
     model, meta = ensure_model()
@@ -211,6 +214,9 @@ def label_posts(post_ids=None):
         "autoLabelDisabled": {"$ne": True},  # admin đã chủ động xóa nhãn -> bỏ qua
         "labels": {"$nin": _object_ids(labels.keys())},
     }
+    if relabel_auto:
+        query.pop("labels")
+        query["$or"] = [{"labels": {"$nin": _object_ids(labels.keys())}}, {"autoLabeled": True}]
     if post_ids:
         query["_id"] = {"$in": _object_ids(post_ids)}
 
@@ -251,10 +257,13 @@ def label_posts(post_ids=None):
     return {"ready": True, "model": model_fp, "labeled": results}
 
 
-def sync(force_train=False):
-    """Đồng bộ toàn bộ: huấn luyện lại nếu cần rồi gán nhãn cho các bài chưa có nhãn."""
+def sync(force_train=False, relabel_auto=False):
+    """Đồng bộ toàn bộ: huấn luyện lại nếu cần rồi gán nhãn cho các bài chưa có nhãn.
+
+    relabel_auto=True: gán lại cả các bài do Tool đã gán (không đụng nhãn do người gán).
+    """
     model, meta = ensure_model(force=force_train)
-    result = label_posts() if model is not None else {
+    result = label_posts(relabel_auto=relabel_auto) if model is not None else {
         "ready": False,
         "reason": meta.get("reason"),
         "labeled": [],
@@ -329,7 +338,11 @@ def evaluate(test_ratio=0.3, seed=42):
         return {"error": "Không đủ dữ liệu để đánh giá (cần nhiều bài có nhãn hơn)"}
 
     documents, document_labels = _build_corpus({**data, "trainable_labels": train_labels}, train)
-    model = LdaLabeler.train(documents, document_labels, train_labels)
+    train_counts = {}
+    for p in train:
+        for l in p["labels"]:
+            train_counts[l] = train_counts.get(l, 0) + 1
+    model = LdaLabeler.train(documents, document_labels, train_labels, label_train_counts=train_counts)
     correct, exact, details = 0, 0, []
     for post in test:
         prediction = model.predict_labels(post_tokens(post["title"], post["content"]))
