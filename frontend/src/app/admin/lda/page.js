@@ -57,7 +57,7 @@ export default function AdminLdaPage() {
   const handleRelabelAuto = async () => {
     const ok = await askConfirm({
       title: 'Gán lại các bài tự động?',
-      message: 'Tất cả bài viết do Tool tự gán nhãn (🤖) sẽ được gán lại theo mô hình và ngưỡng hiện tại. Nhãn do người dùng/admin gán không bị thay đổi.',
+      message: 'Tất cả bài viết do Tool tự gán nhãn (🤖) sẽ được gán lại bằng mô hình chỉ học từ nhãn do người gán (theo ngưỡng hiện tại). Nhãn do người dùng/admin gán không bị thay đổi.',
       confirmText: 'Gán lại'
     });
     if (ok) handleSync(false, true);
@@ -143,7 +143,12 @@ export default function AdminLdaPage() {
             <div className="card">
               <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Dữ liệu huấn luyện</div>
               <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6 }}>{info.trainingPosts} bài viết</div>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+              {info.includesAutoLabels && (
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+                  Gồm {info.autoLabeledTrainingPosts} bài 🤖 tự gán nhãn
+                </p>
+              )}
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                 {info.excludedImagePosts > 0
                   ? `Loại ${info.excludedImagePosts} bài có ảnh`
                   : 'Chỉ đọc tiêu đề + nội dung chữ, bỏ qua ảnh'}

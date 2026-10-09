@@ -24,7 +24,10 @@ Tool/
 
 ## Thuật toán
 
-1. **Dữ liệu huấn luyện**: bài viết chưa xóa, có nhãn do người dùng/admin gán (`autoLabeled != true`).
+1. **Dữ liệu huấn luyện**: bài viết chưa xóa, có nhãn còn tồn tại – gồm nhãn do người dùng/admin gán **và cả
+   nhãn do Tool tự gán** (`LDA_TRAIN_ON_AUTO_LABELS=true`, mặc định). Admin cần rà soát và gán lại các bài 🤖 bị sai
+   để mô hình không học theo lỗi. Đặt `LDA_TRAIN_ON_AUTO_LABELS=false` để chỉ học từ nhãn do người gán.
+   Riêng nút **Gán lại bài tự động** và lệnh `evaluate` luôn chỉ dùng nhãn do người gán.
    Tool **chỉ đọc chữ của tiêu đề + nội dung**; ảnh (`<img>`, ảnh markdown, `data:image`) và thumbnail bị bỏ qua.
    Mỗi bài có tối đa 2 nhãn (bài được dùng cho centroid của cả 2 nhãn). Nhãn chưa có bài viết bị bỏ qua.
    Muốn loại hẳn bài có ảnh khỏi dữ liệu huấn luyện: đặt `LDA_EXCLUDE_IMAGE_POSTS=true`.
@@ -71,8 +74,9 @@ Mô hình được lưu trong collection `lda_models` (mảng numpy dạng `.npy
 
 Tool dùng **fingerprint** (SHA-1 của nội dung + nhãn của toàn bộ dữ liệu huấn luyện). Mỗi lần được gọi,
 nếu fingerprint khác với mô hình đã lưu thì Tool tự huấn luyện lại trước khi dự đoán, nên mô hình luôn khớp
-với dữ liệu mới nhất. Bài đã có nhãn **không bao giờ bị Tool gán lại**; khi admin gán lại nhãn cho bài
-tự gán, bài đó trở thành dữ liệu huấn luyện.
+với dữ liệu mới nhất. Bài đã có nhãn **không bị Tool gán lại** (trừ nút *Gán lại bài tự động*). Bài 🤖 tự gán
+cũng được dùng để huấn luyện; khi admin sửa nhãn của bài 🤖, bài đó chuyển thành nhãn do người gán và mô hình
+tự huấn luyện lại theo nhãn đã sửa.
 
 ## API
 

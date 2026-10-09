@@ -80,6 +80,9 @@ SECOND_LABEL_MAX_CENTROID_SIM = _float("LDA_SECOND_LABEL_MAX_CENTROID_SIM", 0.9)
 SECOND_LABEL_MIN_DOCS = _int("LDA_SECOND_LABEL_MIN_DOCS", 3)
 
 # ---- Dữ liệu huấn luyện ----
+# Dùng cả bài do Tool tự gán nhãn (autoLabeled = true) để huấn luyện.
+# Admin cần rà soát và gán lại các bài tự gán bị sai để mô hình không học theo lỗi.
+TRAIN_ON_AUTO_LABELS = _bool("LDA_TRAIN_ON_AUTO_LABELS", True)
 MIN_DOCS_PER_LABEL = _int("LDA_MIN_DOCS_PER_LABEL", 1)
 MIN_LABELS = _int("LDA_MIN_LABELS", 2)
 TITLE_WEIGHT = _int("LDA_TITLE_WEIGHT", 2)

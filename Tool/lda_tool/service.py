@@ -1,14 +1,14 @@
 """Nghiệp vụ của Tool: đọc dữ liệu từ MongoDB, huấn luyện, gán nhãn tự động.
 
-- Dữ liệu huấn luyện: các bài viết chưa xóa, có nhãn còn tồn tại do con người
-  gán (autoLabeled != true). Tool chỉ đọc chữ của tiêu đề + nội dung, bỏ qua ảnh.
-  Mỗi bài viết chỉ có đúng 1 nhãn (bài cũ có nhiều nhãn thì lấy nhãn đầu tiên).
+- Dữ liệu huấn luyện: các bài viết chưa xóa, có nhãn còn tồn tại: nhãn do con
+  người gán và (mặc định, LDA_TRAIN_ON_AUTO_LABELS=true) cả nhãn do Tool tự gán.
+  Tool chỉ đọc chữ của tiêu đề + nội dung, bỏ qua ảnh. Mỗi bài có tối đa 2 nhãn.
 - Nhãn chưa có bài viết nào sẽ bị bỏ qua.
 - Mỗi lần được gọi, Tool tính "dấu vân tay" (fingerprint) của dữ liệu huấn luyện.
   Nếu bài viết / nhãn thay đổi thì fingerprint đổi -> tự động huấn luyện lại.
-- Chỉ bài viết CHƯA có nhãn (hoặc chỉ còn nhãn đã bị xóa) mới được gán 1 nhãn và
+- Chỉ bài viết CHƯA có nhãn (hoặc chỉ còn nhãn đã bị xóa) mới được gán 1-2 nhãn và
   đánh dấu autoLabeled = true. Bài đã có nhãn (do người hay do Tool gán) không
-  bao giờ bị gán lại.
+  bị gán lại, trừ khi admin bấm "Gán lại bài tự động" (relabel_auto).
 """
 import hashlib
 import random
@@ -45,12 +45,16 @@ def load_active_labels(db):
     return {str(label["_id"]): label for label in labels}
 
 
-def collect_training_data(db):
+def collect_training_data(db, include_auto=None):
+    """include_auto: có dùng bài do Tool tự gán nhãn để huấn luyện không
+    (None = theo cấu hình LDA_TRAIN_ON_AUTO_LABELS)."""
+    if include_auto is None:
+        include_auto = config.TRAIN_ON_AUTO_LABELS
     labels = load_active_labels(db)
-    cursor = db.posts.find(
-        {"deleted": {"$ne": True}, "autoLabeled": {"$ne": True}, "labels.0": {"$exists": True}},
-        {"title": 1, "content": 1, "labels": 1},
-    )
+    query = {"deleted": {"$ne": True}, "labels.0": {"$exists": True}}
+    if not include_auto:
+        query["autoLabeled"] = {"$ne": True}
+    cursor = db.posts.find(query, {"title": 1, "content": 1, "labels": 1, "autoLabeled": 1})
 
     posts, excluded_image = [], 0
     for post in cursor:
@@ -70,6 +74,7 @@ def collect_training_data(db):
                     "title": post.get("title", ""),
                     "content": post.get("content", ""),
                     "labels": post_labels,
+                    "auto": bool(post.get("autoLabeled")),
                 }
             )
 
@@ -89,6 +94,8 @@ def collect_training_data(db):
         "trainable_labels": trainable,
         "label_counts": {l: label_counts[l] for l in trainable},
         "posts": posts,
+        "include_auto": include_auto,
+        "auto_posts": sum(1 for p in posts if p["auto"]),
         "excluded_image_posts": excluded_image,
         "skipped_labels": sorted(set(labels) - set(trainable)),
     }
@@ -100,7 +107,8 @@ def fingerprint(data):
         f"{config.ALGORITHM_VERSION}|{config.NUM_TOPICS}|{config.DOC_TOPIC_PRIOR}|"
         f"{config.TOPIC_WORD_PRIOR}|{config.GIBBS_ITER}|{config.GIBBS_BURN_IN}|{config.GIBBS_THIN}|"
         f"{config.INFER_ITER}|{config.INFER_BURN_IN}|{config.RANDOM_STATE}|"
-        f"{config.TITLE_WEIGHT}|{config.USE_LABEL_TEXT}|{config.EXCLUDE_IMAGE_POSTS}".encode()
+        f"{config.TITLE_WEIGHT}|{config.USE_LABEL_TEXT}|{config.EXCLUDE_IMAGE_POSTS}|"
+        f"auto={data.get('include_auto')}".encode()
     )
     for label_id in data["trainable_labels"]:
         label = data["labels"][label_id]
@@ -139,6 +147,8 @@ def _train(db, data, fp):
         "reason": None,
         "stats": {
             "trainingPosts": len(data["posts"]),
+            "autoLabeledTrainingPosts": data["auto_posts"],
+            "includesAutoLabels": data["include_auto"],
             "excludedImagePosts": data["excluded_image_posts"],
             "labelDocCounts": data["label_counts"],
             "skippedLabels": data["skipped_labels"],
@@ -172,10 +182,13 @@ def _train(db, data, fp):
     return model, meta
 
 
-def ensure_model(force=False):
-    """Trả về (model, meta). Tự huấn luyện lại nếu dữ liệu đã thay đổi."""
+def ensure_model(force=False, include_auto=None):
+    """Trả về (model, meta). Tự huấn luyện lại nếu dữ liệu đã thay đổi.
+
+    include_auto=False: chỉ học từ nhãn do người gán (dùng khi gán lại bài tự động).
+    """
     db = get_db()
-    data = collect_training_data(db)
+    data = collect_training_data(db, include_auto=include_auto)
     fp = fingerprint(data)
 
     if not force:
@@ -193,7 +206,7 @@ def ensure_model(force=False):
 
 
 # ----------------------------------------------------------------- labeling
-def label_posts(post_ids=None, relabel_auto=False):
+def label_posts(post_ids=None, relabel_auto=False, model=None, meta=None):
     """Gán 1-2 nhãn cho các bài CHƯA có nhãn (hoặc chỉ còn nhãn đã bị xóa).
 
     post_ids: chỉ xử lý các bài này (dùng khi backend vừa tạo/sửa bài);
@@ -202,7 +215,8 @@ def label_posts(post_ids=None, relabel_auto=False):
     yêu cầu, vd sau khi đổi ngưỡng). Nhãn do con người gán không bao giờ bị thay đổi.
     """
     db = get_db()
-    model, meta = ensure_model()
+    if model is None:
+        model, meta = ensure_model()
     if model is None:
         return {"ready": False, "reason": meta.get("reason"), "labeled": []}
 
@@ -261,9 +275,12 @@ def sync(force_train=False, relabel_auto=False):
     """Đồng bộ toàn bộ: huấn luyện lại nếu cần rồi gán nhãn cho các bài chưa có nhãn.
 
     relabel_auto=True: gán lại cả các bài do Tool đã gán (không đụng nhãn do người gán).
+    Khi gán lại, mô hình CHỈ học từ nhãn do người gán; nếu học cả nhãn tự gán thì mô
+    hình sẽ lặp lại đúng các nhãn sai cũ. Lần gọi sau Tool tự huấn luyện lại với
+    toàn bộ dữ liệu (gồm cả các nhãn vừa gán lại).
     """
-    model, meta = ensure_model(force=force_train)
-    result = label_posts(relabel_auto=relabel_auto) if model is not None else {
+    model, meta = ensure_model(force=force_train, include_auto=False if relabel_auto else None)
+    result = label_posts(relabel_auto=relabel_auto, model=model, meta=meta) if model is not None else {
         "ready": False,
         "reason": meta.get("reason"),
         "labeled": [],
@@ -317,6 +334,8 @@ def status():
         },
         "data": {
             "trainingPosts": len(data["posts"]),
+            "autoLabeledTrainingPosts": data["auto_posts"],
+            "includesAutoLabels": data["include_auto"],
             "excludedImagePosts": data["excluded_image_posts"],
             "trainableLabels": [{**named(l), "posts": data["label_counts"][l]} for l in data["trainable_labels"]],
             "skippedLabels": [named(l) for l in data["skipped_labels"]],
@@ -327,8 +346,11 @@ def status():
 
 
 def evaluate(test_ratio=0.3, seed=42):
-    """Đánh giá offline: chia train/test trên các bài đã gán nhãn (không ghi CSDL)."""
-    data = collect_training_data(get_db())
+    """Đánh giá offline: chia train/test trên các bài do NGƯỜI gán nhãn (không ghi CSDL).
+
+    Không dùng nhãn tự gán vì đó là dự đoán của chính Tool, không phải đáp án đúng.
+    """
+    data = collect_training_data(get_db(), include_auto=False)
     posts = list(data["posts"])
     random.Random(seed).shuffle(posts)
     n_test = max(1, int(len(posts) * test_ratio))
